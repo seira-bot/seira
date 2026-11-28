@@ -13,6 +13,7 @@ import { afterAll, beforeAll, expect, it } from "vitest";
 import { launchCloudSendFixture, type CloudSendFixture, type CloudTeamFixture } from "../scripts/testing/cloud-send-fixture.ts";
 import { personKey } from "./person-key.ts";
 import { hostTimeout } from "./testing/host-timeout.ts";
+import { readJsonLines } from "./testing/json-lines.ts";
 
 const ADA = { email: "ada@acme.test", role: "admin" as const };
 const MIRA = { email: "mira@acme.test", role: "member" as const };
@@ -36,8 +37,7 @@ let room = "";
 
 const planPath = () => join(team.home, "plan.json");
 const dataDir = (...rest: string[]) => join(team.home, ".seira", ...rest);
-const turns = (): Turn[] => existsSync(`${planPath()}.evidence.jsonl`)
-  ? readFileSync(`${planPath()}.evidence.jsonl`, "utf8").trim().split("\n").filter(Boolean).map((line) => JSON.parse(line) as Turn) : [];
+const turns = (): Turn[] => readJsonLines<Turn>(`${planPath()}.evidence.jsonl`);
 const turn = (key: string): Turn => { const found = turns().find((one) => one.planKey === key); if (!found) throw new Error(`no turn ${key}`); return found; };
 const sent = (one: Turn): string => { const content = (one.prompt as { message?: { content?: unknown } }).message?.content; return typeof content === "string" ? content : JSON.stringify(content); };
 const stepText = (entry: Step | undefined): string => JSON.stringify(entry?.response?.result?.content ?? entry?.response?.error ?? "");

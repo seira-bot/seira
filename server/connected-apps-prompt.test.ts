@@ -27,4 +27,23 @@ describe("connectedAppsPrompt", () => {
   it("says nothing for a bot with apps on when the turn mounts none", () => {
     expect(connectedAppsPrompt({}, { ...READY, mounted: false })).toBe("");
   });
+
+  it("does not name GitHub as a Composio app when the bot has the native GitHub (AC-01)", () => {
+    const text = connectedAppsPrompt({
+      connectorTools: { gmail: { tools: "*" as const }, github_app: { tools: "*" as const } },
+      connectorScopes: { apps: { gmail: "write", github_app: "write" } },
+    }, READY);
+    expect(text).toContain("Gmail");
+    expect(text).not.toMatch(/github/i);
+  });
+
+  it("neither says there are no apps nor sends the bot to Composio for GitHub when GitHub is its only app (AC-02)", () => {
+    const text = connectedAppsPrompt({
+      connectorTools: { github_app: { tools: "*" as const } },
+      connectorScopes: { apps: { github_app: "write" } },
+    }, READY);
+    expect(text).toBe(" This bot may use no other connected app.");
+    expect(text).not.toContain("No connected apps");
+    expect(text).not.toContain("COMPOSIO_MANAGE_CONNECTIONS");
+  });
 });

@@ -3,6 +3,7 @@ import type { WidgetAction } from "../shared/widget.ts";
 import { contextText } from "./delta-context.ts";
 import { CARD_RECORDS_SOURCE, cardRecords, SETTINGS_CARD_RECORDS_SOURCE, SETUP_RECORDS_SOURCE, UI_PLACE_RECORDS_SOURCE } from "./records-block.ts";
 import type { Message } from "./store.ts";
+import { PublicError } from "./public-error.ts";
 
 const MAX_REPLY_EXCERPT = 900;
 
@@ -52,10 +53,10 @@ export type ReplyTarget = Message & {
 
 export function replyTargetIn(messages: readonly Message[], value: unknown): Message | undefined {
   if (value === undefined || value === null || value === "") return undefined;
-  if (typeof value !== "string") throw Object.assign(new Error("replyToId must be a message id"), { status: 400 });
+  if (typeof value !== "string") throw new PublicError("replyToId must be a message id", 400);
   const target = messages.find((message) => message.id === value);
   if (!target || (target.kind !== "text" && target.kind !== "widget" && target.kind !== "app") || !target.text?.trim()) {
-    throw Object.assign(new Error("the message being replied to is no longer available"), { status: 404 });
+    throw new PublicError("the message being replied to is no longer available", 404);
   }
   return target;
 }

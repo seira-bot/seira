@@ -6,12 +6,12 @@ import { expect, it } from "vitest";
 import { launchVerificationServer, runControlSeira, verificationServerEnvironment } from "../scripts/control-seira.ts";
 import { waitForExit } from "./testing/cleanup.ts";
 import { readHandoffs } from "./testing/handoff-rows.ts";
+import { readJsonLines } from "./testing/json-lines.ts";
 
 const primary = { instanceId: "opencodeGo", model: "fixture/recovery" };
 const backup = { instanceId: "claude", model: "claude-sonnet-5" };
 const transient = { code: -32603, message: "Internal error", data: { details: "Upstream connection timed out" } };
-const jsonLines = (path: string): any[] => existsSync(path)
-  ? readFileSync(path, "utf8").split("\n").filter(Boolean).map((line) => JSON.parse(line)) : [];
+const jsonLines = (path: string): any[] => readJsonLines(path);
 // At boot OpenCode lists its models by opening one ACP session in this
 // folder. Those calls are catalog discovery, not the turns under test.
 const CATALOG_PROBE_FOLDER = ["", "providers", "opencode", "discovery"].join(sep);

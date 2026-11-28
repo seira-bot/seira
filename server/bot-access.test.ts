@@ -3,9 +3,10 @@ import { PassThrough } from "node:stream";
 import { describe, expect, it } from "vitest";
 
 import { accessFromVisibility, atLeast, sharedLevel, visibilityFromAccess } from "../shared/bot-access.ts";
-import { accessOf, memberBot, memberLevel, parseBotAccess, VisibleSet } from "./bot-visibility.ts";
+import { accessOf, memberBot, memberLevel, parseBotAccess, pathSubject, VisibleSet } from "./bot-visibility.ts";
 import { readBody } from "./harness/http.ts";
 import { createBotAccessGate, levelNeeded, relayedSendRefusal, setupCardRefusal } from "./host/bot-access-gate.ts";
+import { personKey } from "./person-key.ts";
 import type { RequestAuth } from "./request-auth.ts";
 import { memberBotPatchViolation } from "./request-auth.ts";
 import { settledAccess } from "./routes/bot-access.ts";
@@ -93,6 +94,7 @@ describe("what a request needs", () => {
     expect(levelNeeded("PUT", "/api/bots/b1/access")).toBe("edit");
     expect(levelNeeded("PATCH", "/api/bots/b1")).toBeNull();
     expect(levelNeeded("DELETE", "/api/routines/r1")).toBeNull();
+    expect(levelNeeded("POST", "/api/routines/r1/skip")).toBeNull();
   });
 
   it("lets each level change only its own fields of a bot", () => {
@@ -139,6 +141,31 @@ describe("what a request needs", () => {
     const body = readBody(req);
     stream.end(JSON.stringify({ memberIds: ["pay"] }));
     await expect(body).rejects.toMatchObject({ message: refusal.error, status: 403, errorKey: refusal.errorKey, errorParams: refusal.errorParams });
+  });
+
+  it("gives a skip of one run the same access rule as a change to the routine, on a Team Cloud", () => {
+    const EVE = "eve@acme.test";
+    const bot = { id: "pay", threadId: "t-pay", visibility: { people: [BOB, CARA, DAN] }, access: { everyone: "none" as const, people: { [BOB]: "view" as const, [CARA]: "chat" as const, [DAN]: "edit" as const } } };
+    const visible = (email: string) => new VisibleSet([bot], [], { kind: "member", email }, undefined, { of: () => undefined, person: null });
+    const session = (email: string): RequestAuth => ({
+      kind: "session", via: "bearer", scopes: ["client"],
+      session: { id: email, email, tokenHash: "0".repeat(64), label: email, scopes: ["client"], createdAt: 0, lastSeenAt: 0, expiresAt: 1 },
+    });
+    const ask = (email: string, writer: string | undefined, method: string, path: string) => createBotAccessGate({
+      botName: () => "Payroll", roomBots: () => undefined, threadOwner: () => undefined,
+      routine: (id) => (id === "r1" ? { botId: "pay" } : undefined), run: () => undefined,
+      routineWriter: () => (writer ? personKey({ id: writer, email: writer }) : undefined),
+    })(new PassThrough() as unknown as IncomingMessage, session(email), method, path, visible(email));
+    const cases: Array<[who: string, writer: string | undefined, allowed: boolean]> = [
+      [BOB, undefined, false], [BOB, BOB, false], [CARA, undefined, false], [CARA, CARA, true], [DAN, undefined, true],
+    ];
+    for (const [who, writer, allowed] of cases) {
+      const skip = ask(who, writer, "POST", "/api/routines/r1/skip");
+      expect(skip, `${who} wrote it: ${writer === who}`).toEqual(ask(who, writer, "PATCH", "/api/routines/r1"));
+      expect(skip === null, `${who} wrote it: ${writer === who}`).toBe(allowed);
+    }
+    expect(pathSubject("/api/routines/r1/skip")).toEqual({ kind: "routine", id: "r1" });
+    expect(visible(EVE).bot("pay")).toBe(false);
   });
 
   it("relays another app's message only for someone who can chat with the bot", () => {

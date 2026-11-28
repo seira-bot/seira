@@ -20,6 +20,7 @@ import type { LocalSource } from "./reader.ts";
 import { expireReceipts, undoJob } from "./receipts.ts";
 import { SUMMARY_FILE, type ReadSummary } from "./spool.ts";
 import { createUploadStore, type ImportLimits, type UploadPart } from "./upload.ts";
+import { PUBLIC_ERROR_MARK } from "../public-error.ts";
 
 const DAY = 24 * 60 * 60 * 1000;
 const HOUR = 60 * 60 * 1000;
@@ -27,6 +28,7 @@ const UPLOAD_KEEP_MS = DAY;
 const PASTE_REF = "paste";
 
 export class ImportJobError extends Error {
+  readonly [PUBLIC_ERROR_MARK] = true;
   readonly status: number;
   readonly code: ImportErrorCode | "not-found" | "conflict" | "invalid";
 
@@ -324,11 +326,24 @@ export class AiImportJobs {
       this.reads.delete(id);
       void worker.terminate();
     };
+    // A broken worker is not a verdict on the file, so the person gets a failed job, not a 422.
+    const failBeforeSniff = () => {
+      this.db.insertJob(row);
+      this.cleanup(id, row.input);
+      this.fail(id, "worker-failed");
+      inserted = true;
+      this.publish(this.get(id));
+      answer({ type: "sniffed", kind: row.view.source.kind });
+    };
     worker.on("message", (message: ReadPassMessage) => {
       if (run.ended) return;
       if (!inserted) {
         if (message.type === "error") {
           finish();
+          if (message.code === "worker-failed") {
+            failBeforeSniff();
+            return;
+          }
           rmSync(stagingDir, { recursive: true, force: true });
           answer(message);
           return;
@@ -381,8 +396,7 @@ export class AiImportJobs {
       if (run.ended) return;
       finish();
       if (!inserted) {
-        rmSync(stagingDir, { recursive: true, force: true });
-        answer({ type: "error", code: "worker-failed" });
+        failBeforeSniff();
         return;
       }
       this.cleanup(id, row.input);

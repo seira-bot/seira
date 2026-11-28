@@ -209,8 +209,19 @@ const REDIRECT_STATUSES: ReadonlySet<number> = new Set([301, 302, 303, 307, 308]
 /** The only headers that go to another origin after a redirect. Every other header is dropped, not listed: a saved
  * header, a session id or a cookie belongs to the server the person added. */
 const CROSS_ORIGIN_HEADERS: readonly string[] = ["accept", "content-type"];
+/** The headers that may go to an origin other than the saved server's: the allowlist and nothing else. */
+function crossOriginHeaders(sent: RequestInit["headers"]): Headers {
+  const from = new Headers(sent);
+  const kept = new Headers();
+  for (const name of CROSS_ORIGIN_HEADERS) {
+    const value = from.get(name);
+    if (value !== null) kept.set(name, value);
+  }
+  return kept;
+}
 export const MAX_MCP_REDIRECTS = 5;
 export const ONE_BOT_REDIRECT_REFUSAL = "The server redirects to an app that serves one bot only.";
+export const ONE_BOT_ENDPOINT_REFUSAL = "The server names an app that serves one bot only as its endpoint.";
 
 export class RemoteMcpClient {
   private readonly target: RemoteMcpSpec;
@@ -333,13 +344,7 @@ export class RemoteMcpClient {
       if (hop >= MAX_MCP_REDIRECTS) throw new McpHttpError("protocol", "too many redirects");
       if (!own && isOneBotMcpServer({ type: "http", url: next.toString() })) throw new McpHttpError("protocol", ONE_BOT_REDIRECT_REFUSAL);
       if (next.origin !== new URL(current).origin) {
-        const kept = new Headers();
-        const sent = new Headers(request.headers);
-        for (const name of CROSS_ORIGIN_HEADERS) {
-          const value = sent.get(name);
-          if (value !== null) kept.set(name, value);
-        }
-        request = { ...request, headers: kept };
+        request = { ...request, headers: crossOriginHeaders(request.headers) };
       }
       current = next.toString();
       const toGet = response.status === 303 || ((response.status === 301 || response.status === 302) && request.method === "POST");
@@ -353,7 +358,9 @@ export class RemoteMcpClient {
   }
 
   private async post(url: string, frame: unknown, signal: AbortSignal): Promise<Response> {
-    const headers = this.headers();
+    // An SSE `endpoint` event can name another origin. Only the allowlist goes there, as after a redirect.
+    const sameOrigin = new URL(url).origin === new URL(this.target.url).origin;
+    const headers = sameOrigin ? this.headers() : crossOriginHeaders(this.headers());
     headers.set("content-type", "application/json");
     let response: Response;
     try {
@@ -367,7 +374,7 @@ export class RemoteMcpClient {
       throw new McpHttpError("status", `HTTP ${response.status}`, response.status, response.headers.get("www-authenticate") ?? undefined);
     }
     const session = response.headers.get("mcp-session-id");
-    if (session) this.sessionId = session;
+    if (session && sameOrigin) this.sessionId = session;
     return response;
   }
 
@@ -430,12 +437,22 @@ export class RemoteMcpClient {
           await readSse(response, this.sseAbort.signal, (event) => {
             if (event.event === "endpoint") {
               if (!settled) {
-                settled = true;
+                let endpoint: string | null = null;
                 try {
-                  resolveEndpoint(new URL(event.data, this.target.url).toString());
-                  signal.removeEventListener("abort", abortOpening);
+                  endpoint = new URL(event.data, this.target.url).toString();
                 } catch {
+                  settled = true;
                   rejectEndpoint(new McpHttpError("protocol", "invalid endpoint event"));
+                }
+                if (endpoint !== null) {
+                  // The endpoint is a destination like each redirect hop: a one-bot address is refused, unless this
+                  // server is that address. The throw ends the stream and fails the opening.
+                  if (!isOneBotMcpServer(this.target) && isOneBotMcpServer({ type: "http", url: endpoint })) {
+                    throw new McpHttpError("protocol", ONE_BOT_ENDPOINT_REFUSAL);
+                  }
+                  settled = true;
+                  resolveEndpoint(endpoint);
+                  signal.removeEventListener("abort", abortOpening);
                 }
               }
               return undefined;

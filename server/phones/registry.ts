@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { phoneRegistration, type PhoneRegistration } from "../../shared/phone-jobs.ts";
 import { writeFileAtomic } from "../atomic.ts";
+import { PublicError } from "../public-error.ts";
 
 export { phoneRegistration, type PhoneRegistration };
 
@@ -25,7 +26,7 @@ export const MAX_PHONES = 20;
 export const PHONE_REMOVED_TEXT = "This phone was removed on the computer. Pair it again to use its apps.";
 const SEEN_WRITE_MS = 60_000;
 
-const failure = (message: string, status = 409) => Object.assign(new Error(message), { status });
+const failure = (message: string, status = 409) => new PublicError(message, status);
 
 export class PhoneRegistry {
   private readonly file: string;

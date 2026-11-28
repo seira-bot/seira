@@ -12,6 +12,7 @@ import { requestNotificationPermission } from "@/lib/notify";
 import { firstSentence } from "@/lib/soul";
 import { currentTaskBot, useStore, type Bot } from "@/state/store";
 import type { ApprovalMode } from "../../../shared/approval-mode";
+import type { StartsTodos } from "../../../shared/todo";
 import { BOT_PROFILE_LIMITS } from "../../../shared/bot-profile";
 import { REPLY_STYLES, type ReplyStyle } from "../../../shared/reply-style";
 import { ApprovalChip } from "../ComposerPlusMenu";
@@ -28,10 +29,11 @@ import type { useBotSettingsDerived } from "../bot-settings/useBotSettingsDerive
 import { useThreadApproval } from "../thread-approval";
 import { AdvancedSettingsRow } from "./AdvancedSettingsRow";
 import { BackupAis } from "./BackupAis";
+import { BotTodos } from "./BotTodos";
 import { HeavyBotRow } from "./HeavyBotRow";
 import { SoulChanges } from "./SoulChanges";
 import type { SimplePageId } from "./page-registry";
-import { buttonCls, Card, ColRow, NavRow, RowIcon, rowCls, RowText, Segmented, SwitchRow, TrashButton, type SegmentOption } from "./rows";
+import { buttonCls, Card, ColRow, NavRow, RowIcon, rowCls, RowText, Segmented, SegmentedRow, SwitchRow, TrashButton, type SegmentOption } from "./rows";
 
 type Derived = ReturnType<typeof useBotSettingsDerived>;
 
@@ -95,6 +97,10 @@ export function SettingsPage({ bot, derived, onOpen, editingInstructions = false
     patch({ notifications: enabled });
   };
   const alwaysAllow = bot.alwaysAllow ?? [];
+  const startsOptions: SegmentOption<StartsTodos>[] = [
+    { value: "auto", label: t("botPanel.todos.startsAuto") },
+    { value: "manual", label: t("botPanel.todos.startsManual") },
+  ];
 
   const soulOpen = editingInstructions || Boolean(bot.soulDrift);
   const enabledApps = [
@@ -224,6 +230,19 @@ export function SettingsPage({ bot, derived, onOpen, editingInstructions = false
           checked={bot.notifications}
           onChange={toggleNotifications}
         />
+      </Card>
+
+      <Card anchor="todos">
+        <SegmentedRow
+          attr="data-starts-todos"
+          title={t("botPanel.todos.starts")}
+          hint={bot.startsTodos === "manual" ? t("botPanel.todos.startsManualHint", { name }) : t("botPanel.todos.startsAutoHint", { name })}
+          label={t("botPanel.todos.starts")}
+          value={bot.startsTodos ?? "auto"}
+          onChange={(value) => patch({ startsTodos: value })}
+          options={startsOptions}
+        />
+        <BotTodos bot={bot} />
       </Card>
 
       <Card anchor="uses">

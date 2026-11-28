@@ -32,6 +32,7 @@ import { createPersonInbox, type Delivery, type Item, type Passed, type PersonIn
 import { createRepresentative, type RepresentativeDeps } from "./representative.ts";
 import { oneLine } from "./text-clip.ts";
 import { conversationLanguage, serverLine } from "../server-lines.ts";
+import { PublicError } from "../public-error.ts";
 
 export const MESSAGE_PERSON_PATH = "/api/internal/people/message";
 export const MESSAGE_PERSON_MAX = 2_000;
@@ -365,7 +366,7 @@ export function createTeamMessages(deps: TeamMessagesDeps) {
       const repeated = store.messagesFor(threadId).some((message) => message.sendId === line.sendId);
       const passed = replyIn(auth, threadId, messageId, emoji, { ...line, reaction: emoji });
       if (!passed) return null;
-      if (passed.status >= 400) return Promise.reject(Object.assign(passed.error ? new Error(passed.error) : userErrorThrown("serverError.inbox.answerNotPassed"), { status: passed.status }));
+      if (passed.status >= 400) return Promise.reject(Object.assign(passed.error ? new PublicError(passed.error) : userErrorThrown("serverError.inbox.answerNotPassed"), { status: passed.status }));
       return Promise.resolve(repeated ? { queued: false, repeated: true } : { queued: false });
     },
     /** The viewer's inbox as its panel lists it; null for someone on a team without one. */

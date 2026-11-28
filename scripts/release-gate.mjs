@@ -1,6 +1,8 @@
 // Decides if a release run needs a person. It reads every commit since the last version on npm and the pull
 // request that merged it. Only the gated npm publish workflow can publish to npm, so each version on npm passed the gate
 // or waited in the `release-approval` environment. It only reads from GitHub, through `gh api`.
+// A pull request passes when a trusted author wrote it (the list is .github/release-trusted-authors.json on main), the
+// reviewer App approved its final head commit, and it touches no sensitive path.
 // Exit status: 0 the run may publish with no wait, 1 the run waits in `release-approval` first, 2 refuse, wrong use or an API error.
 import { appendFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
@@ -12,7 +14,8 @@ import { repoFromRemote } from "./release-preflight.mjs";
 const SHA = /^[0-9a-f]{40}$/;
 const PLAIN_VERSION = /^\d+\.\d+\.\d+$/;
 const SEMVER = /^v(\d+)\.(\d+)\.(\d+)$/;
-const TRUSTED_AUTHORS = new Set(["OWNER", "MEMBER"]);
+/** The one file that lists the trusted authors. The gate reads it from `main` through the API, never from the pull request under review. */
+export const TRUSTED_AUTHORS_PATH = ".github/release-trusted-authors.json";
 const PAGE = 100;
 
 /** The npm package that npm-publish.yml publishes. A fixed name: a pull request cannot move the baseline to another package. */
@@ -138,15 +141,86 @@ export function humanApproved(reviews, logins, headSha) {
   return [...latest.values()].some((review) => review.state === "APPROVED" && Boolean(headSha) && review.commit_id === headSha);
 }
 
+/** One list is valid when each entry has exactly a string login and a positive integer ID, with no duplicate ID or login. */
+function validEntries(list) {
+  if (!Array.isArray(list)) return null;
+  const ids = new Set();
+  const logins = new Set();
+  for (const item of list) {
+    if (!item || typeof item !== "object" || Array.isArray(item)) return null;
+    const keys = Object.keys(item);
+    if (keys.length !== 2 || !keys.includes("login") || !keys.includes("id")) return null;
+    if (typeof item.login !== "string" || item.login === "" || !Number.isInteger(item.id) || item.id <= 0) return null;
+    const login = item.login.toLowerCase();
+    if (ids.has(item.id) || logins.has(login)) return null;
+    ids.add(item.id);
+    logins.add(login);
+  }
+  return list.map((item) => ({ login: item.login, id: item.id }));
+}
+
+/** Reads the trusted-author file. Any fault in the file gives empty lists, so every pull request needs a person. */
+export function parseTrustedAuthors(text) {
+  try {
+    const value = JSON.parse(String(text));
+    if (value && typeof value === "object" && !Array.isArray(value) && value.version === 1) {
+      const bots = validEntries(value.botAuthors);
+      const admins = validEntries(value.adminAuthors);
+      const reviewers = validEntries(value.reviewerApps);
+      if (bots && admins && reviewers) return { bots, admins, reviewers, valid: true };
+    }
+  } catch {
+    // Bad JSON is treated as empty lists below.
+  }
+  return { bots: [], admins: [], reviewers: [], valid: false };
+}
+
+/** An account matches an entry only when the type, the numeric ID, and the login all agree. A login alone never counts. */
+const accountMatches = (user, type, entries) =>
+  Boolean(user) && user.type === type && entries.some((entry) => entry.id === user.id && entry.login.toLowerCase() === String(user.login ?? "").toLowerCase());
+
+/** The kind of trusted author: "bot" for a listed App, "admin" for a listed person who still needs a permission check, or null. */
+export function authorKind(user, trusted) {
+  if (accountMatches(user, "Bot", trusted.bots)) return "bot";
+  if (accountMatches(user, "User", trusted.admins)) return "admin";
+  return null;
+}
+
+/**
+ * The reviewer App approved when its latest review that counts is APPROVED and covers the final head commit. The review
+ * must come from a listed Bot account with the listed ID.
+ */
+export function reviewerApproved(reviews, trusted, headSha) {
+  const latest = new Map();
+  for (const review of reviews) {
+    if (!accountMatches(review.user, "Bot", trusted.reviewers) || !["APPROVED", "CHANGES_REQUESTED", "DISMISSED"].includes(review.state)) continue;
+    latest.set(review.user.id, review);
+  }
+  return [...latest.values()].some((review) => review.state === "APPROVED" && Boolean(headSha) && review.commit_id === headSha);
+}
+
+/** The shared account of the bots. It never counts as a human reviewer. */
+const SHARED_ACCOUNT = { login: "RamaAditya49", id: 213913142 };
+
 /** The reasons why a merged pull request needs a person. An empty list means the pull request passes. */
-export function evaluatePull({ pull, detail = pull, files, reviews, logins }) {
+export function evaluatePull({ pull, detail = pull, files, reviews, logins, trusted = parseTrustedAuthors(""), isAdmin = false }) {
   const reasons = [];
-  if (!TRUSTED_AUTHORS.has(pull.author_association)) reasons.push(`author ${pull.user?.login ?? "unknown"} is not an owner or member (${pull.author_association})`);
-  if (typeof detail.changed_files === "number" && detail.changed_files > files.length) reasons.push(`the file list is incomplete (${files.length} of ${detail.changed_files})`);
+  const user = detail.user ?? pull.user;
+  const kind = authorKind(user, trusted);
+  const authorOk = kind === "bot" || (kind === "admin" && isAdmin);
+  if (!authorOk) reasons.push(`author ${user?.login ?? "unknown"} is not a trusted author (${kind === "admin" ? "admin permission not confirmed" : "not in the list on main"})`);
+  else if (!reviewerApproved(reviews, trusted, detail.head?.sha)) reasons.push("the reviewer App has no approval of the final head commit");
+  // A listed human approval may clear only the two author reasons. Evidence faults and sensitive paths always stay.
+  // With an invalid list, no human review clears anything. The shared account is never a human reviewer: it is fixed here,
+  // so the exclusion holds also when the list is invalid or the account is missing from it.
+  const humanLogins = logins.filter((login) => login !== SHARED_ACCOUNT.login.toLowerCase());
+  const humanReviews = reviews.filter((review) => review.user?.id !== SHARED_ACCOUNT.id);
+  const cleared = reasons.length > 0 && trusted.valid === true && humanApproved(humanReviews, humanLogins, detail.head?.sha);
+  const kept = cleared ? [] : reasons;
+  if (typeof detail.changed_files === "number" && detail.changed_files > files.length) kept.push(`the file list is incomplete (${files.length} of ${detail.changed_files})`);
   const touched = sensitiveFiles(files);
-  if (touched.length > 0) reasons.push(`it changes a sensitive path: ${touched.join(", ")}`);
-  if (reasons.length === 0 || humanApproved(reviews, logins, detail.head?.sha)) return [];
-  return reasons;
+  if (touched.length > 0) kept.push(`it changes a sensitive path: ${touched.join(", ")}`);
+  return kept;
 }
 
 /** The merged pull request whose merge commit is `sha` on main, or null. */
@@ -160,6 +234,28 @@ async function paged(api, path, pick = (body) => body) {
     const batch = pick(await api(`${path}${path.includes("?") ? "&" : "?"}per_page=${PAGE}&page=${page}`));
     items.push(...batch);
     if (batch.length < PAGE) return items;
+  }
+}
+
+/** The trusted-author file on `main`. A missing file or bad JSON gives empty lists. Any other API error throws, so the run is refused. */
+async function readTrustedAuthors(api, repo) {
+  let body;
+  try {
+    body = await api(`repos/${repo}/contents/${TRUSTED_AUTHORS_PATH}?ref=main`);
+  } catch (error) {
+    if (error.status === 404) return parseTrustedAuthors("");
+    throw error;
+  }
+  if (body?.encoding !== "base64" || typeof body.content !== "string") return parseTrustedAuthors("");
+  return parseTrustedAuthors(Buffer.from(body.content, "base64").toString("utf8"));
+}
+
+/** True only when the API says the account has admin permission on the repository. Any error counts as no. */
+async function hasAdminPermission(api, repo, login) {
+  try {
+    return (await api(`repos/${repo}/collaborators/${encodeURIComponent(login)}/permission`)).permission === "admin";
+  } catch {
+    return false;
   }
 }
 
@@ -212,6 +308,9 @@ export async function releaseGate({ api, fetchJson, repo = "owner/name", npmPack
 
   const { logins, valid } = parseReviewers(reviewers);
   if (!valid) say("note", "RELEASE_HUMAN_REVIEWERS is not a JSON array, so it counts as an empty list");
+
+  const trusted = await readTrustedAuthors(api, repo);
+  if (!trusted.valid) say("note", `${TRUSTED_AUTHORS_PATH} on main is missing or not valid, so no author is trusted`);
 
   let commit = sha;
   if (tag) {
@@ -268,7 +367,9 @@ export async function releaseGate({ api, fetchJson, repo = "owner/name", npmPack
       const files = await paged(api, `repos/${repo}/pulls/${pull.number}/files`);
       const reviews = await paged(api, `repos/${repo}/pulls/${pull.number}/reviews`);
       const detail = await api(`repos/${repo}/pulls/${pull.number}`);
-      verdicts.set(pull.number, evaluatePull({ pull, detail, files, reviews, logins }));
+      const user = detail.user ?? pull.user;
+      const isAdmin = authorKind(user, trusted) === "admin" && (await hasAdminPermission(api, repo, user.login));
+      verdicts.set(pull.number, evaluatePull({ pull, detail, files, reviews, logins, trusted, isAdmin }));
     }
     const reasons = verdicts.get(pull.number);
     if (reasons.length === 0) say("ok", `${short(item.sha)} pull request #${pull.number} passes`);

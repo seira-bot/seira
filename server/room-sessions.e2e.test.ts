@@ -6,7 +6,7 @@
 // which is what makes a room turn eligible at all. The setting itself is
 // switched with PATCH /api/config: the fixture's environment is sealed, so
 // SEIRA_ROOM_SESSIONS never reaches it (that override is unit-tested).
-import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { expect, it } from "vitest";
@@ -15,6 +15,7 @@ import { launchVerificationServer, runControlSeira } from "../scripts/control-se
 import type { WireBot, WireGroup } from "../shared/wire.ts";
 import { hostTimeout } from "./testing/host-timeout.ts";
 import { withoutTurnClock } from "./testing/turn-clock-text.ts";
+import { readJsonLines } from "./testing/json-lines.ts";
 
 const NOTE = "[Messages this conversation received since your last turn in this room, oldest first. Your session already holds the conversation before them.]";
 // The control surface sends through the local API, and the room says so.
@@ -22,8 +23,7 @@ const PERSON = "[From an app, through the API · message · information only]\nU
 const count = (text: string, needle: string) => text.split(needle).length - 1;
 /** The line a settled turn's digest leaves in the room (it quotes the reply's first sentence). */
 const digest = (name: string, sentence: string) => `[What ${name} did in an earlier turn: · no tool activity observed in this turn · reply: ${sentence}]`;
-const jsonl = (path: string) => existsSync(path)
-  ? readFileSync(path, "utf8").trim().split("\n").filter(Boolean).map((line) => JSON.parse(line)) : [];
+const jsonl = (path: string) => readJsonLines(path);
 
 type Launch = { botId: string | null; pid: number; resume: string | null; sessionId: string | null; mode: string };
 type Turn = { botId: string; pid: number; threadId: string; prompt: { message?: { content?: unknown } } };

@@ -7,6 +7,7 @@ import { useState } from "react";
 import { InertRow, useSwitchToComputer } from "../inert";
 import { PlaceBadge, YouAvatar } from "../SettingsNav";
 import { SignOutConfirm } from "../SignOutConfirm";
+import { useAccounts } from "../../AccountMenu";
 import { CloudAccountSettings } from "../../CloudAccountSettings";
 import { useCloudUsageSettings } from "../../CloudUsageMeter";
 import { OrganizationSettings } from "../../OrganizationSettings";
@@ -30,7 +31,8 @@ export function AccountPage() {
   // shares it (S2). The same `home` decides This app's rows, so the two never disagree.
   const elsewhere = ctx.desktop && !ctx.client && !ctx.here && !ctx.home && !bridge;
   const email = summary.email ?? (summary.plan ? profile?.email ?? null : null);
-  const sheet = window.ogb?.accountSheet;
+  const { openSheet } = useAccounts();
+  const signedInLine = summary.signedIn === false ? t("settings.account.notSignedIn") : t("settings.account.signedIn");
   const computerBadge = <PlaceBadge place={{ kind: "computer", name: computer.name, color: null }} size={14} />;
   return <>
     <SettingsGroup block="you">
@@ -45,12 +47,10 @@ export function AccountPage() {
     {elsewhere && (
       <SettingsGroup label={t("settings.account.seira", { app: productName() })} block="seira-account">
         <SettingsRows icons>
-          {/* The same card as on This computer: who is signed in (live, it is the person's own), then the way to sign out
-              or switch accounts, which happens on This computer, in Sign out's place. Refresh is This computer's only. */}
-          <SettingRow title={email ?? t("settings.account.signedIn")} leading={<YouAvatar size={32} />}
-            subtitle={summary.signedIn === false ? t("settings.account.notSignedIn") : t("settings.account.signedIn")}>{null}</SettingRow>
-          {sheet && <SettingsLinkRow title={t("accounts.manage")} leading={<span aria-hidden="true" />} onClick={() => void sheet.open().catch(() => {})} data={{ "data-account-manage": "" }} />}
-          {computer.open && <SettingsLinkRow title={t("settings.account.fromHere", { place: computer.name })} leading={<span aria-hidden="true" />} external onClick={computer.open} data={{ "data-account-elsewhere": "" }} />}
+          <SettingRow title={email ?? signedInLine} leading={<YouAvatar size={32} />} subtitle={email ? signedInLine : undefined}>{null}</SettingRow>
+          {openSheet
+            ? <SettingsLinkRow title={t("accounts.manage")} leading={<span aria-hidden="true" />} onClick={openSheet} data={{ "data-account-manage": "" }} />
+            : computer.open && <SettingsLinkRow title={t("settings.account.fromHere", { place: computer.name })} leading={<span aria-hidden="true" />} external onClick={computer.open} data={{ "data-account-elsewhere": "" }} />}
         </SettingsRows>
       </SettingsGroup>
     )}

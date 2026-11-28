@@ -8,6 +8,7 @@ import type { McpServerSpec } from "./contracts.ts";
 import { discoverMcpAuth, type McpAuthMetadata } from "./mcp-oauth-discovery.ts";
 import { McpOAuthStore, type McpOAuthRecord, type McpOAuthTokens } from "./mcp-oauth-store.ts";
 import type { McpOAuthClientConfig } from "./mcp-registry.ts";
+import { PUBLIC_ERROR_MARK } from "./public-error.ts";
 
 export type McpSignInPhase = "waiting" | "succeeded" | "failed" | "cancelled" | "expired";
 
@@ -89,6 +90,7 @@ interface StartingFlow {
 }
 
 export class McpSignInError extends Error {
+  readonly [PUBLIC_ERROR_MARK] = true;
   readonly status: 400 | 404 | 409;
   constructor(message: string, status: 400 | 404 | 409) {
     super(message);
@@ -210,6 +212,12 @@ function registrationRefusal(response: Response, description: unknown): string {
   const wait = retryAfter ? ` It asked to wait: Retry-After ${/^\d+$/.test(retryAfter) ? `${retryAfter} seconds` : retryAfter}.` : "";
   if (!reason && !wait) return "This server would not register Seira for sign-in. Try again later.";
   return `This server would not register Seira for sign-in (HTTP ${response.status})${reason ? `: ${reason}` : "."}${wait} Try again later.`;
+}
+
+function registrationRefusalLog(endpoint: string, response: Response, error: unknown): string {
+  const code = typeof error === "string" && /^[\w.-]{1,64}$/.test(error) ? ` ${error}` : "";
+  const type = response.headers.get("content-type")?.split(";")[0]?.trim().slice(0, 60) || "no content type";
+  return `mcp sign-in: ${new URL(endpoint).host} refused client registration: HTTP ${response.status}${code}, ${type}`;
 }
 
 export class McpOAuthManager {
@@ -515,8 +523,9 @@ export class McpOAuthManager {
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
     const parsed: unknown = await response.json().catch(() => null);
-    const body = (parsed && typeof parsed === "object" ? parsed : {}) as { client_id?: unknown; error_description?: unknown };
+    const body = (parsed && typeof parsed === "object" ? parsed : {}) as { client_id?: unknown; error?: unknown; error_description?: unknown };
     if (!response.ok || typeof body.client_id !== "string" || !body.client_id) {
+      console.warn(registrationRefusalLog(meta.registrationEndpoint, response, body.error));
       throw new RegistrationRefused(registrationRefusal(response, body.error_description));
     }
     return body.client_id;

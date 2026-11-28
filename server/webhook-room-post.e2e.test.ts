@@ -1,12 +1,13 @@
 // A webhook that posts straight into a room, end to end on a real server with the scripted engine and a loopback
 // Chatterbox stub: one bot-authored message with its voice note and image, no run; a wrong secret and a bot that left the
 // room are refused; and another member reads the post as an outside app's words.
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { writeFileSync } from "node:fs";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { join } from "node:path";
 import { expect, it } from "vitest";
 import { launchVerificationServer, runControlSeira } from "../scripts/control-seira.ts";
+import { readJsonLines } from "./testing/json-lines.ts";
 
 const MP3 = Buffer.from("ID3 fake mp3 for the webhook room fixture");
 const PNG = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
@@ -25,9 +26,7 @@ it("posts text, a voice note and an image into a room as one bot message, with n
     });
   });
   const planPath = join(fixture.info.dataDir, "room-plan.json");
-  const turns = (botId: string) => (existsSync(`${planPath}.evidence.jsonl`)
-    ? readFileSync(`${planPath}.evidence.jsonl`, "utf8").trim().split("\n").filter(Boolean).map((line) => JSON.parse(line))
-    : []).filter((turn: { botId: string }) => turn.botId === botId);
+  const turns = (botId: string) => (readJsonLines(`${planPath}.evidence.jsonl`)).filter((turn: { botId: string }) => turn.botId === botId);
   const api = async (method: string, path: string, body?: unknown, status = 200) => {
     const response = await fetch(`${fixture.info.url}${path}`, {
       method, headers: { "content-type": "application/json", origin: fixture.info.url },

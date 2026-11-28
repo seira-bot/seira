@@ -78,6 +78,15 @@ describe("taggedToolsFor", () => {
     expect(await taggedToolsFor({ ...input, direct: true, apps: async () => { throw new Error("down"); } })).toBe("The person's message tags these tools: notion (an MCP server). They want them used for this request. If one fails, say so plainly.");
   });
 
+  it("names the native GitHub with its tools when it mounts, and prefers it to Composio GitHub (AC-06)", async () => {
+    const both = { ...input, text: "use @GitHub", apps: async () => [{ slug: "github", label: "GitHub" }] };
+    const text = await taggedToolsFor({ ...both, direct: true, github: true });
+    expect(text).toContain("GitHub (the GitHub connection: use its GITHUB_APP_* tools, not Composio)");
+    expect(await taggedToolsFor({ ...both, text: "use @github_app", direct: true, github: true, apps: null })).toContain("GITHUB_APP_*");
+    expect(await taggedToolsFor({ ...both, direct: true })).toContain("GitHub (a connected app)");
+    expect(await taggedToolsFor({ ...both, direct: true, github: true, apps: null, text: "use @Gmail" })).toBe("");
+  });
+
   it("does not name an app the turn does not have", async () => {
     expect(await taggedToolsFor({ ...input, direct: true, apps: null })).not.toContain("Gmail");
   });

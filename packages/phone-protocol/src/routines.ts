@@ -170,6 +170,8 @@ export interface Routine {
   wakeAt?: number;
   skippedRuns?: number;
   lastSkippedAt?: number;
+  /** Future occurrences (epoch ms, oldest first) that the person skipped. The scheduler does not run them. */
+  skippedOccurrences?: number[];
   failureStreak?: number;
   /** Its newest runs in a row whose cloud computer did not start, once there are enough that its scheduled runs are
    * spaced out for it. It stays on. */

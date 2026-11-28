@@ -71,8 +71,8 @@ export { codexUpdateCommand };
 import { customApprovalParams, namedApprovalParams, permissionProfileUnsupported, withFolderGrants, withResolvedSandbox, type CodexApprovalParams } from "./codex-approval-params.ts"; import { AGENTS_TOOL_TIMEOUT_SECONDS } from "./agents-tool-limit.ts"; import { COMPUTER_PROXY_TIMEOUT_MS } from "../harness-budget.ts";
 import { canUseMcpServer } from "../../shared/tool-scope.ts";
 import { assertToolScopeSupported } from "../../shared/tool-scope-support.ts";
-import { appMountFor, gateServer, mcpStdioServer } from "../mcp-gate-config.ts"; import { OWN_APPS_SERVER } from "../../shared/own-apps.ts";
-import { CALL_TOOL, DESCRIBE_TOOL, SEARCH_TOOL, directoryCallTarget } from "../mcp-directory.ts"; import { codexCommandOutput, codexPatchProgress } from "./tool-progress.ts";
+import { appMountFor, gateServer, mcpStdioServer } from "../mcp-gate-config.ts"; import { OWN_APPS_SERVER } from "../../shared/own-apps.ts"; import { GITHUB_APP_MCP_SERVER } from "../../shared/github-app.ts";
+import { CALL_TOOL, DESCRIBE_TOOL, SEARCH_TOOL, directoryCallTarget } from "../mcp-directory.ts"; import { codexCommandOutput, codexPatchProgress } from "./tool-progress.ts"; import { codexTurnPlan } from "./turn-plan.ts";
 
 export { decodeCodexSelection, readCodexModelCatalog, STATIC_CODEX_MODELS } from "./codex-catalog.ts";
 
@@ -497,6 +497,7 @@ export const CodexDriver: ProviderDriver<CodexConfig> = {
           mountSelected("browser", "browser", turn.integrations.browser);
         }
         for (const name of ["data", "email", "device"] as const) if (turn.integrations?.[name]) mountSelected(name, name, turn.integrations[name]);
+        if (turn.integrations?.github) mountSelected(GITHUB_APP_MCP_SERVER, GITHUB_APP_MCP_SERVER, turn.integrations.github);
         // A `-c` override merges with a same-named server in config.toml, and stdio over url is
         // "invalid configuration" that kills the turn, so such a server mounts under its own name.
         const takenMcpNames = new Set([...declaredInCodexConfig, ...selectedMcp.keys(), ...(turn.integrations?.phone ? ["seira_phone"] : [])]);
@@ -970,6 +971,7 @@ export const CodexDriver: ProviderDriver<CodexConfig> = {
             break;
           }
           case "item/fileChange/patchUpdated": { const draft = codexPatchProgress(p); if (draft) emit({ ...base(threadId, turnId), ...draft }); break; }
+          case "turn/plan/updated": { const plan = codexTurnPlan(p); if (plan) emit({ ...base(threadId, turnId), ...plan }); break; }
           case "item/commandExecution/outputDelta": { const output = codexCommandOutput(p); if (output) emit({ ...base(threadId, turnId), ...output }); break; }
           case "item/started": {
             const item = p.item ?? {};
@@ -1585,7 +1587,7 @@ export const CodexDriver: ProviderDriver<CodexConfig> = {
       customMcp: true,
         phoneMcp: true,
         browserMcp: true,
-        dataMcp: true, emailMcp: true, deviceMcp: true,
+        dataMcp: true, emailMcp: true, githubMcp: true, deviceMcp: true,
         images: true,
         nativeImageInput: true,
         effortLevels: ["low", "medium", "high", "xhigh", "max"],

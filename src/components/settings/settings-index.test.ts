@@ -47,6 +47,13 @@ describe("the pages", () => {
     expect(ids(fullContext()).filter((id) => simple.includes(id))).toEqual(simple);
   });
 
+  it("lands on the block a request names on a page, and turns Advanced on when that block needs it", () => {
+    expect(resolveSettingsTarget("ai", fullContext(), "ai-pool")).toEqual({ page: "ai", anchor: "ai-pool" });
+    expect(resolveSettingsTarget("ai", fullContext({ advanced: false }), "routing")).toEqual({ page: "ai", anchor: "routing", advanced: true });
+    expect(resolveSettingsTarget("ai", fullContext(), null)).toEqual({ page: "ai" });
+    expect(resolveSettingsTarget("people", fullContext({ team: false, admin: false }), "bot-access")).toMatchObject({ page: "overview", missing: "people" });
+  });
+
   it("turns Advanced on for a link, a notice or a search hit that asks for an Advanced page or row from Simple", () => {
     const simple = fullContext({ advanced: false });
     expect(resolveSettingsTarget("general", simple)).toEqual({ page: "general", advanced: true });
@@ -104,6 +111,12 @@ describe("the pages", () => {
     expect(ids(fullContext({ plan: false }))).not.toContain("plan");
   });
 
+  it("AC-E1 shows People on a connected server's page in the desktop window, and AC-E3 not on the desktop app's own computer", () => {
+    expect(ids(fullContext({ desktop: true, here: false, admin: true, cloud: false }))).toContain("people");
+    expect(ids(fullContext({ desktop: true, here: true, admin: true, cloud: false }))).not.toContain("people");
+    expect(ids(fullContext({ desktop: true, here: false, admin: false, cloud: false }))).not.toContain("people");
+  });
+
   it("offers a team's member none of the installation's admin pages, and a team's admin all of them", () => {
     for (const page of ["ai", "desktops", "usage", "transfer", "data"] as const) {
       expect(ids(PEOPLE["a team member"])).not.toContain(page);
@@ -132,6 +145,7 @@ describe("old links", () => {
     expect(where("remote")).toEqual({ page: "phone" });
     expect(resolveSettingsTarget("remote", fullContext({ client: true }))).toEqual({ page: "app", anchor: "your-computers" });
     expect(where("engines")).toEqual({ page: "ai", anchor: "providers" });
+    expect(where("aiPool")).toEqual({ page: "ai", anchor: "ai-pool" });
     expect(where("connections")).toEqual({ page: "ai", anchor: "ai-keys" });
     expect(where("imageGeneration")).toEqual({ page: "ai", anchor: "images" });
     expect(where("computer")).toEqual({ page: "desktops" });

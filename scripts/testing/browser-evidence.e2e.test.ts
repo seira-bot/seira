@@ -21,6 +21,7 @@ import { refusalFor } from "../../server/browser/egress/policy.ts";
 import { removeTempDir } from "../../server/testing/cleanup.ts";
 import { launchVerificationServer, runControlSeira } from "../control-seira.ts";
 import { ensureUiBrowser, UI_TOOLS_DIR } from "./control-seira-ui.ts";
+import { readJsonLines } from "../../server/testing/json-lines.ts";
 
 const forced = process.env.SEIRA_UI_E2E === "1";
 const enabled = forced || Boolean(resolveAgentBrowserBinary({ dataDir: UI_TOOLS_DIR, env: process.env }));
@@ -266,7 +267,7 @@ describe("recorded browser steps through the real server", () => {
       return { status: response.status, type, body: type.includes("json") ? await response.json() as any : Buffer.from(await response.arrayBuffer()) };
     };
     const planPath = join(fixture.info.dataDir, "room-plan.json");
-    const evidenceLines = () => { try { return readFileSync(`${planPath}.evidence.jsonl`, "utf8").trim().split("\n").filter(Boolean).map((line) => JSON.parse(line)); } catch { return []; } };
+    const evidenceLines = () => readJsonLines(`${planPath}.evidence.jsonl`);
     try {
       // A self-hosted server's bots reach this machine's own pages only where an admin allows it.
       expect((await api("PATCH", "/api/config", { features: { browser: true }, browserEngine: { egress: { allow: ["127.0.0.1"] } } })).status).toBe(200);

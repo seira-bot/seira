@@ -1,11 +1,12 @@
 // A bot asks for a password and ends its turn. Real server and agents tools on the fake engine: the person hears about
 // it, every surface says the conversation waits on them, and only settling the card ends that. Nothing here reaches the
 // user's data or port 8799.
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, it } from "vitest";
 import { hostTimeout } from "./testing/host-timeout.ts";
 import { launchRestartableServer, type RestartableServer } from "./testing/restartable-server.ts";
+import { readJsonLines } from "./testing/json-lines.ts";
 
 const ASK = { tool: "request_credential", arguments: { label: "Mailbox password", reason: "To read the mail.", delivery: "ref" } };
 
@@ -35,7 +36,7 @@ async function fixture(server: RestartableServer) {
   const messages = async (threadId: string) => (await api(`/api/threads/${threadId}/messages`)).messages as any[];
   const card = async (threadId: string, label = "Mailbox password") => (await messages(threadId)).findLast((message) => message.secret?.label === label);
   const say = (threadId: string, text: string, botId = bot.id) => api(`/api/bots/${botId}/messages`, { text, threadId, sendId: crypto.randomUUID() });
-  const turns = () => existsSync(`${planPath}.evidence.jsonl`) ? readFileSync(`${planPath}.evidence.jsonl`, "utf8").trim().split("\n").filter(Boolean).map((line) => JSON.parse(line)) : [];
+  const turns = () => readJsonLines(`${planPath}.evidence.jsonl`);
   const said = async (threadId: string, text: string) => expect.poll(async () => (await messages(threadId)).some((message) => message.text === text && message.turnTerminal), { timeout: 20_000 }).toBe(true);
   const settled = (threadId: string) => expect.poll(async () => (await task(threadId))?.busy, { timeout: 20_000 }).toBe(false);
   return { server, api, bot, chief, task, owner, notes, notesOf, messages, card, say, turns, said, settled, plan: (plan: unknown) => writeFileSync(planPath, JSON.stringify(plan)) };

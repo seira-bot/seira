@@ -8,7 +8,7 @@ import { PASS, type RouteContext } from "./table.ts";
 
 const admin = { kind: "loopback", scopes: ["admin", "client"] } as unknown as RequestAuth;
 const member = { kind: "session", scopes: ["client"] } as unknown as RequestAuth;
-const view: DepartmentAccessView = { available: true, people: { "ada@acme.test": ["Sales"] }, unreadable: false };
+const view: DepartmentAccessView = { available: true, people: { "ada@acme.test": { departments: [{ name: "Sales", level: "view" }], bots: [{ id: "b-1", level: "chat" }] } }, unreadable: false };
 
 function fixture(result: ReturnType<typeof vi.fn> = vi.fn(() => ({ ok: true }))) {
   const handler = createDepartmentAccessRoutes({ view: () => view, change: result as never });
@@ -37,19 +37,19 @@ describe("/api/department-access", () => {
   it("refuses a member, for reading and for changing", async () => {
     const { call, result } = fixture();
     expect((await call("GET", undefined, member)).sent!.status).toBe(403);
-    expect((await call("PUT", { entry: "ada@acme.test", departments: null }, member)).sent!.status).toBe(403);
+    expect((await call("PUT", { entry: "ada@acme.test", access: null }, member)).sent!.status).toBe(403);
     expect(result).not.toHaveBeenCalled();
   });
 
   it("changes a grant and answers with the list", async () => {
     const { call, result } = fixture();
-    const body = { entry: "ada@acme.test", departments: ["Sales"] };
+    const body = { entry: "ada@acme.test", access: { departments: [{ name: "Sales", level: "view" }], bots: [{ id: "b-1", level: "chat" }] } };
     expect((await call("PUT", body)).sent).toEqual({ status: 200, body: view });
     expect(result).toHaveBeenCalledWith(body);
   });
 
   it("passes the refusal on", async () => {
-    const { call } = fixture(vi.fn(() => ({ ok: false, status: 404, error: "No such department" })));
-    expect((await call("PUT", { entry: "ada@acme.test", departments: ["Legal"] })).sent).toEqual({ status: 404, body: { error: "No such department" } });
+    const { call } = fixture(vi.fn(() => ({ ok: false, status: 400, error: "No such department" })));
+    expect((await call("PUT", { entry: "ada@acme.test", access: { departments: [{ name: "Legal", level: "chat" }], bots: [] } })).sent).toEqual({ status: 400, body: { error: "No such department" } });
   });
 });

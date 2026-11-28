@@ -45,7 +45,7 @@ function fixture(options: { person?: string | null; guest?: boolean } = {}) {
   const person = options.person === undefined ? "owner" : options.person;
   const host = createAppSettings({
     store: store as never, dataDir, entries: [],
-    turnOwner: () => "owner", guestDriven: () => options.guest === true,
+    asker: () => ({ kind: "clean" }), guestDriven: () => options.guest === true,
     requestCredential: async () => ({ status: 500, body: {} }), connectorThread: () => null, language: () => undefined,
     themes: createThemeTool({
       store: themes, person: () => person, changed: (who, skin) => changed.push({ person: who, ...(skin ? { skin } : {}) }),

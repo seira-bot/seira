@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
+import { createWorkflowHost, type WorkflowTurnOptions } from "./host/workflow-host.ts";
 import { recoverRun } from "./routine-recovery.ts";
 import { RoutineManager, type RoutineRun } from "./routines.ts";
 
@@ -243,5 +244,52 @@ describe("a usage limit with a backup engine", () => {
     expect(recoverRun(backup, "This Claude account has reached its 5-hour limit", { limitResetsAt: START + 2 * HOUR, backupReady: true }, START, [])).toEqual({ queued: true });
     expect(backup.retryAt).toBe(START + 15_000);
     expect(backup.attention).toMatch(/backup AI/);
+  });
+});
+
+describe("a limit-reset automation with steps", () => {
+  it("runs its steps from the first step when the limit resets", async () => {
+    const h = harness();
+    const dataDir = mkdtempSync(join(tmpdir(), "seira-limit-steps-"));
+    dirs.push(dataDir);
+    const turns: Array<{ botId: string; text: string; opts: WorkflowTurnOptions }> = [];
+    const at = { x: 0, y: 0 };
+    const host = createWorkflowHost({
+      dataDir,
+      store: { bot: (id: string) => ({ name: id === "scout" ? "Scout" : "Ben" }) as never, patchTask: (() => null) as never, taskByThread: (() => undefined) as never, projectBotForTask: () => null },
+      routines: () => h.manager,
+      routineHooks: () => ({ createTask: () => ({ threadId: "step-chat" }), interruptTurn: async () => {} }),
+      chatModel: (_botId, _run, modelSelection) => modelSelection,
+      botState: () => "ready",
+      startTurn: async (botId, text, opts) => { turns.push({ botId, text, opts }); },
+      reports: { postStep: (() => {}) as never, runSettled: () => {} },
+      emit: () => {},
+    });
+    try {
+      const workflow = host.create({
+        name: "Report",
+        steps: [{ id: "a", kind: "bot", botId: "scout", instruction: "Draft the report", position: at }, { id: "b", kind: "bot", botId: "ben", instruction: "Check the report", position: at }],
+        connections: [{ id: "1", from: "a", to: "b" }],
+      });
+      Object.assign(h.options, { workflowCopy: (id: string) => host.copyFor(id), startWorkflow: (run: RoutineRun, threadId: string, fail: (message: string) => void) => host.start(run, threadId, fail) });
+      h.reset("claude", START + HOUR);
+      const routine = h.create("once", { workflowId: workflow.id });
+      expect(routine).toMatchObject({ workflowId: workflow.id, botId: "scout", schedule: { type: "limit_reset" } });
+      h.at(START + HOUR + 59_000);
+      await h.manager.tick();
+      expect(turns).toEqual([]);
+      h.at(START + HOUR + 61_000);
+      await h.manager.tick();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      const run = h.manager.listRuns()[0]!;
+      expect(run).toMatchObject({ routineId: routine.id, workflowId: workflow.id, status: "running" });
+      expect(h.started).toEqual([]);
+      expect(turns.map((turn) => [turn.botId, turn.opts.threadId, turn.opts.continuesRun])).toEqual([["scout", run.threadId, false]]);
+      expect(turns[0]!.text).toContain("Draft the report");
+      expect(host.run(run.id)).toMatchObject({ startStepId: "a", currentStepId: "a", status: "active" });
+      turns[0]!.opts.onSettled({ ok: true, text: "Draft ready" });
+      expect(turns.map((turn) => turn.botId)).toEqual(["scout", "ben"]);
+      expect(turns[1]!.text).toContain("Draft ready");
+    } finally { host.close(); }
   });
 });

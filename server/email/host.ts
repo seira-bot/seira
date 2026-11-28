@@ -12,13 +12,14 @@ import { appendDecision } from "../decision-log.ts";
 import { conversationLanguage, serverLine } from "../server-lines.ts";
 import { boxUploadsDir } from "../bot-box/plan.ts";
 import { harnessMcpTokenEnv } from "../harness-mcp-token.ts";
-import { AGENTS_NODE_FLAG, SPAWNED_PROXIES } from "../proxy-paths.ts";
+import { AGENTS_NODE_FLAG, ownNode, SPAWNED_PROXIES } from "../proxy-paths.ts";
 import { EmailError, LASTING_SENDING_FAULTS, LIST_MAX, listMailboxes, listMessages, readMessage, searchMessages, sendMessage, SendingError } from "./client.ts";
 import { EMAIL_CANT_SEND_PROMPT, EMAIL_CANT_SEND_TEXT, EMAIL_INSTRUCTIONS, EMAIL_NOT_CONNECTED_TEXT, EMAIL_NOT_SENT_TEXT, EMAIL_PROMPT, EMAIL_TO_CONNECT_PROMPT } from "./instructions.ts";
 import { sendingProblem, type EmailService } from "./service.ts";
 import type { EmailAccount } from "./store.ts";
 import { EMAIL_TOOLS, emailError, emailText, emailToolCallProblem, isEmailRead, isEmailToolName, type EmailTool, type EmailToolResult } from "./tools.ts";
 import { serverTurnedOff } from "../drivers/agents-tool-groups.ts";
+import { PublicError } from "../public-error.ts";
 
 export const EMAIL_INTERNAL_MCP_PATH = "/api/internal/email/mcp";
 
@@ -126,7 +127,7 @@ export function createEmailHost(deps: EmailHostDeps) {
     available: () => allowedHere() && service.mounted(),
     integration(bot: EmailBot, mint: () => string, harnessUrl: string): { command: string; args: string[]; env: Record<string, string> } | null {
       if (!mounts(bot)) return null;
-      return { command: process.execPath, args: [SPAWNED_PROXIES.harnessMcp, EMAIL_MCP_SERVER], env: { ...AGENTS_NODE_FLAG, [harnessMcpTokenEnv("email")]: mint(), SEIRA_HARNESS_URL: harnessUrl } };
+      return { command: ownNode(), args: [SPAWNED_PROXIES.harnessMcp, EMAIL_MCP_SERVER], env: { ...AGENTS_NODE_FLAG, [harnessMcpTokenEnv("email")]: mint(), SEIRA_HARNESS_URL: harnessUrl } };
     },
     prompt(bot: EmailBot): string {
       if (!allowedHere() || service.status().state === "unavailable" || !shown(bot)) return "";
@@ -148,7 +149,7 @@ export function createEmailHost(deps: EmailHostDeps) {
         assertActive();
         return { tools: EMAIL_TOOLS.filter((tool) => verdict(tool.name).ok), instructions: EMAIL_INSTRUCTIONS };
       }
-      if (request.method !== "tools/call") throw Object.assign(new Error("unsupported email method"), { status: 400 });
+      if (request.method !== "tools/call") throw new PublicError("unsupported email method", 400);
       const params = (request.params && typeof request.params === "object" ? request.params : {}) as { name?: unknown; arguments?: unknown };
       const args = (params.arguments ?? {}) as Record<string, unknown>;
       const problem = emailToolCallProblem(params.name, args);

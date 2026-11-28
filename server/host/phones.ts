@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 
+import { settingsVerdict, type SettingsVerdict } from "../app-settings/verdict.ts";
 import { cloudHomeLendingRefusal, createCloudRoutineAuthors, type CloudLendingTurn } from "../cloud-lending.ts";
 import { personKey } from "../person-key.ts";
 import type { PhoneBot, PhonePlace } from "../phones/access.ts";
@@ -84,15 +85,28 @@ export function createPhones(deps: PhonesDeps) {
     if (deps.shared) return null;
     if (deps.cloudHome) return deps.cloudLendingRefusal(turn) === null ? deps.cloudOwnerKey : null;
     if (!desktopPhones()) return null;
-    const lending = desktopLendingTurn({ ...deps.cloudLendingTurn(turn), thread: store.messagesFor(turn.threadId) }, {
+    return desktopRefusal(turn, true) === null ? DESKTOP_OWNER : null;
+  }
+
+  function desktopRefusal(turn: Turn, loopbackIsOwner: boolean) {
+    return cloudHomeLendingRefusal(desktopLendingTurn({ ...deps.cloudLendingTurn(turn), thread: store.messagesFor(turn.threadId) }, {
       adminPersons: () => new Set(deps.sessions.list().filter((session) => session.scopes.includes("admin")).map((session) => personKey(session))),
       originIsUser: () => deps.originIsUser(turn),
       ownerWrote: (id) => {
         const routine = deps.routines()?.listRoutines().find((candidate) => candidate.id === id);
         return Boolean(routine && routineAuthors?.authored(routine.id, routine));
       },
-    });
-    return cloudHomeLendingRefusal(lending) === null ? DESKTOP_OWNER : null;
+      loopbackIsOwner,
+    }));
+  }
+
+  /** Whether a turn may change the app's settings. Security invariant: where several people sign in, or this machine's
+   * requests are a service's, only an admin's own request line counts, and even then nothing applies without a tap. */
+  function settingsAsker(turn: Turn): SettingsVerdict {
+    if (deps.shared) return { kind: "refused", code: "shared" };
+    if (deps.cloudHome) return settingsVerdict(deps.cloudLendingRefusal(turn), false);
+    const loopbackIsOwner = deps.loopbackTrust !== "service";
+    return settingsVerdict(desktopRefusal(turn, loopbackIsOwner), !desktopPhones());
   }
 
   const fromPhone = (auth: RequestAuth): boolean => {
@@ -118,6 +132,7 @@ export function createPhones(deps: PhonesDeps) {
       return sendId;
     },
     turnOwner,
+    settingsAsker,
     /** Where the person is, from where the turn came from: the phone's send, the person at the computer, or nobody. */
     place(threadId: string, personAsked: boolean): PhonePlace {
       const request = deps.request(threadId);

@@ -115,7 +115,7 @@ export type SecretRequestCardData = Omit<import("../../shared/wire").SecretReque
 
 export type ComputerControlState = { held: boolean; helpReason: string | null; help?: import("../../shared/wire").ComputerHelpRef | null };
 
-export interface Message extends Pick<import("../../shared/wire").WireMessage, "widget" | "app" | "fromApp" | "pointed" | "routedBy" | "quickModel" | "automation" | "publishedPage" | "template" | "sender" | "setupSuggestion" | "settingsCard" | "uiPlace" | "helperIntro" | "helperFollowup" | "setupOffer" | "savedSteps" | "setupChoices" | "setupChoicesPending" | "setupChoicesUpdating" | "setupRequest" | "relay" | "inbox" | "sentDirectly" | "doneWhen" | "bugReport" | "bugOffer" | "engineCompaction" | "stoppedBy" | "teamAsk" | "teamRequest" | "teamSuggestion" | "teamIntro" | "handoff"> {
+export interface Message extends Pick<import("../../shared/wire").WireMessage, "widget" | "app" | "fromApp" | "pointed" | "routedBy" | "quickModel" | "automation" | "publishedPage" | "template" | "sender" | "setupSuggestion" | "taskSuggestions" | "settingsCard" | "uiPlace" | "helperIntro" | "helperFollowup" | "setupOffer" | "savedSteps" | "setupChoices" | "setupChoicesPending" | "setupChoicesUpdating" | "setupRequest" | "relay" | "inbox" | "sentDirectly" | "doneWhen" | "bugReport" | "bugOffer" | "engineCompaction" | "stoppedBy" | "teamAsk" | "teamRequest" | "teamSuggestion" | "teamIntro" | "handoff" | "fromTodo" | "todoBatch"> {
   id: string;
   role: "bot" | "user";
   kind: "text" | "options" | "activity" | "screen" | "connector" | "secret" | "signin" | "routine.run" | "goal.run" | "burst" | "digest" | "compaction" | "call" | "widget" | "app";
@@ -232,7 +232,7 @@ export interface Task extends Pick<WireTask, "private" | "shared" | "sharedWith"
   cacheKeepWarm?: import("../../shared/wire").CacheKeepWarmStatus;
   cwd?: string | null;
   modelSelection?: ModelSelection;
-  followsBotModel?: boolean;
+  followsBotModel?: boolean; aiPool?: "auto" | "pinned";
   approvalMode?: ApprovalMode;
   autoApprove?: boolean;
   alwaysAllow?: string[];
@@ -317,7 +317,7 @@ export interface Bot extends DefaultBotFields, Pick<WireBot, "mascotFaceColor" |
   hidden?: boolean;
   section?: string;
   pinnedMessageId?: string;
-  chiefOfStaff?: boolean;
+  chiefOfStaff?: boolean; startsTodos?: import("../../shared/todo").StartsTodos;
   managedSections?: string[];
   createdBy?: string; reportsTo?: string;
   composio?: boolean;
@@ -378,7 +378,7 @@ export function currentTaskBot(bot: Bot, threadId = bot.threadId): Bot {
 
 export type TaskUpdatePatch = Partial<Pick<Task, "modelSelection" | "approvalMode" | "autoApprove" | "pinnedMessageId">> & {
   acknowledgeLocalAuto?: boolean;
-  updateBotDefault?: boolean;
+  updateBotDefault?: boolean; aiPool?: boolean;
   resetApprovalToAsk?: boolean;
   projectId?: string | null;
   archivedAt?: number | null;
@@ -389,7 +389,7 @@ export type TaskUpdatePatch = Partial<Pick<Task, "modelSelection" | "approvalMod
 };
 
 function taskPatchFields(patch: TaskUpdatePatch): Partial<Task> {
-  const { acknowledgeLocalAuto: _localAck, updateBotDefault: _modelDefault, resetApprovalToAsk, projectId, archivedAt, snoozedUntil, surface, pinned, link, ...fields } = patch;
+  const { acknowledgeLocalAuto: _localAck, updateBotDefault: _modelDefault, aiPool: _aiPool, resetApprovalToAsk, projectId, archivedAt, snoozedUntil, surface, pinned, link, ...fields } = patch;
   return { ...fields, ...(resetApprovalToAsk ? { approvalMode: "ask", autoApprove: false, alwaysAllow: [] } : {}),
     ...(projectId === undefined ? {} : { projectId: projectId ?? undefined }),
     ...(archivedAt === undefined ? {} : { archivedAt: archivedAt ?? undefined }),
@@ -468,7 +468,7 @@ export interface InstanceInfo extends InstanceEndpointInfo {
 /** A Settings page (`SettingsPageId`) or an older page name that `settings-index.ts` sends to its new page and section. */
 export type AppSettingsSection = SettingsPageId
   | "desktopWorkspaces" | "organization" | "cloudAccount" | "experimental" | "connections" | "decisionModel" | "imageGeneration"
-  | "engines" | "companion" | "remote" | "computer" | "logins" | "botAccess" | "activity" | "backups" | "workspaces"
+  | "engines" | "aiPool" | "companion" | "remote" | "computer" | "logins" | "botAccess" | "activity" | "backups" | "workspaces"
   | "skills" | "import" | "updates";
 export type SettingsPageId = "overview" | "phone" | "ai" | "bots" | "desktops" | "vault" | "usage" | "transfer" | "data" | "people"
   | "installations" | "account" | "plan" | "app" | "general" | "appearance";
@@ -536,6 +536,7 @@ export interface AppState {
   appSettingsSection: AppSettingsSection;
   appSettingsCloudLink: number;
   appSettingsPhonePairing: number;
+  appSettingsAnchor: string | null;
   shortcutsOpen: boolean;
   cloudAdd: { source: import("@/lib/cloud-plan").CloudSource; signIn?: true } | null;
   cloudHowTo: boolean;
@@ -728,7 +729,7 @@ export type Action =
   | { type: "dataView"; view: AppState["dataView"] }
   | { type: "loadDataSheet"; botId: string; onError?: (message: string) => void }
   | { type: "modelVariantRuntime"; event: RuntimeEvent }
-  | { type: "setModel"; botId: string; selection: ModelSelection; threadId?: string; updateBotDefault?: boolean; resetApprovalToAsk?: boolean }
+  | { type: "setModel"; botId: string; selection: ModelSelection; threadId?: string; updateBotDefault?: boolean; aiPool?: boolean; resetApprovalToAsk?: boolean }
   | { type: "interrupt"; botId: string; threadId?: string; onError?: () => void }
   | { type: "connected"; value: boolean }
   | { type: "error"; message: string | null }
@@ -747,7 +748,7 @@ export type Action =
   | { type: "focusMessage"; threadId: string; messageId: string; matchText?: string }
   | { type: "focusMessageConsumed"; nonce: number }
   | { type: "unreadDividerDone"; threadId: string }
-  | { type: "toggleAppSettings"; open?: boolean; section?: AppSettingsSection; cloudLink?: boolean; phonePairing?: boolean }
+  | { type: "toggleAppSettings"; open?: boolean; section?: AppSettingsSection; anchor?: string; cloudLink?: boolean; phonePairing?: boolean }
   | { type: "toggleShortcuts"; open?: boolean }
   | { type: "openCloudAdd"; source: import("@/lib/cloud-plan").CloudSource; signIn?: true }
   | { type: "closeCloudAdd" }
@@ -1347,7 +1348,7 @@ export function reducer(state: AppState, action: Action): AppState {
         const picked = reducer(state, { type: "updateTask", botId: action.botId, threadId: action.threadId,
           patch: { modelSelection: action.selection, resetApprovalToAsk: action.resetApprovalToAsk } });
         return updateBot(picked, action.botId, (bot) => ({ ...bot, tasks: bot.tasks?.map((task) => task.threadId !== action.threadId ? task
-          : { ...task, followsBotModel: Boolean(action.updateBotDefault) || sameModelSelection(action.selection, bot.modelSelection) }) }));
+          : { ...task, followsBotModel: Boolean(action.updateBotDefault) || sameModelSelection(action.selection, bot.modelSelection), ...(action.aiPool === undefined ? {} : { aiPool: action.aiPool ? "auto" as const : "pinned" as const }) }) }));
       }
       return reconcileModelVariantSessions(updateBot(state, action.botId, (b) => ({ ...b, modelSelection: action.selection })));
     case "updateTask": {
@@ -1498,6 +1499,7 @@ export function reducer(state: AppState, action: Action): AppState {
         appSettingsSection: action.section ?? (open ? "overview" : state.appSettingsSection),
         appSettingsCloudLink: action.cloudLink && open ? state.appSettingsCloudLink + 1 : 0,
         appSettingsPhonePairing: action.phonePairing && open ? state.appSettingsPhonePairing + 1 : 0,
+        appSettingsAnchor: open ? action.anchor ?? null : null,
         settingsOpen: open ? false : state.settingsOpen,
         computerOpen: open ? false : state.computerOpen,
         inspectorOpen: open ? false : state.inspectorOpen,
@@ -1831,7 +1833,7 @@ export const initialState: AppState = {
   appSettingsOpen: false,
   appSettingsSection: "overview",
   appSettingsCloudLink: 0,
-  appSettingsPhonePairing: 0,
+  appSettingsPhonePairing: 0, appSettingsAnchor: null,
   shortcutsOpen: false,
   cloudAdd: null,
   cloudHowTo: false,
@@ -2667,7 +2669,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           if (action.threadId) {
             persistTaskPatch(action.botId, action.threadId, {
               modelSelection: action.selection,
-              ...(action.updateBotDefault ? { updateBotDefault: true } : {}),
+              ...(action.updateBotDefault ? { updateBotDefault: true } : {}), ...(action.aiPool === undefined ? {} : { aiPool: action.aiPool }),
               ...(action.resetApprovalToAsk ? { resetApprovalToAsk: true } : {}),
             });
             break;

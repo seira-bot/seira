@@ -4,6 +4,7 @@ import { isCredentialTargetId, isProviderCredentialTarget } from "../shared/cred
 import type { CipherSuite } from "@hpke/core";
 
 import { PHONE_SECRET_INFO, PHONE_SECRET_MAX_BYTES, PHONE_SECRET_PROTOCOL_VERSION } from "../shared/phone-secret-envelope.ts";
+import { PUBLIC_ERROR_MARK } from "./public-error.ts";
 
 export { PHONE_SECRET_INFO, PHONE_SECRET_MAX_BYTES, PHONE_SECRET_PROTOCOL_VERSION };
 
@@ -46,6 +47,7 @@ type PendingSave = {
 };
 
 export class PhoneSecretError extends Error {
+  readonly [PUBLIC_ERROR_MARK] = true;
   readonly status: number;
 
   constructor(message: string, status = 400) {

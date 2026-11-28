@@ -7,7 +7,7 @@ import { unbridgedServer } from "./drivers/agents-bridge.ts";
 import { GATE_APPS_ENV, REMOTE_MCP_APPS_ENV, type AppMount } from "./mcp-app-observer.ts";
 import { DEFAULT_RESULT_BUDGET, QUERY_TOOL_NAME } from "./mcp-trim.ts";
 import { REMOTE_MCP_CONFIG_ENV, remoteMcpSpec } from "./mcp-http.ts";
-import { SPAWNED_PROXIES } from "./proxy-paths.ts";
+import { ownNode, SPAWNED_PROXIES } from "./proxy-paths.ts";
 import { TOOL_SCHEMA_PROFILE_ENV, type ToolSchemaProfileId } from "./tool-schema-profile.ts";
 
 export type { AppMount } from "./mcp-app-observer.ts";
@@ -153,7 +153,7 @@ export function mcpStdioServer(server: unknown, options: StdioServerOptions = {}
     ...(options.apps ? { [REMOTE_MCP_APPS_ENV]: JSON.stringify(options.apps) } : {}),
   };
   return {
-    command: options.execPath ?? process.execPath,
+    command: options.execPath ?? ownNode(),
     args: [SPAWNED_PROXIES.mcpRemote, ...(options.configEnvName ? ["--config-env", options.configEnvName] : [])],
     env: {
       ...options.nodeEnv,
@@ -222,7 +222,7 @@ export function gateServer(input: {
     throw new Error("Invalid private MCP gate configuration.");
   }
   return {
-    command: input.execPath ?? process.execPath,
+    command: input.execPath ?? ownNode(),
     args: [SPAWNED_PROXIES.mcpGate, ...(input.configEnvName ? ["--config-env", input.configEnvName] : [])],
     env: {
       ...input.nodeEnv,

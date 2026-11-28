@@ -1,8 +1,9 @@
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import { launchVerificationServer, runControlSeira } from "../scripts/control-seira.ts";
 import { startBrokerFake, type BrokerFake } from "./testing/broker-fake.ts";
+import { readJsonLines } from "./testing/json-lines.ts";
 
 // App events end to end on a real server (temporary home, scripted engine) against the connected-apps service's own
 // code with a fake Composio behind it: a chat request becomes an app-event automation, a Composio delivery reaches the
@@ -33,9 +34,7 @@ afterAll(async () => {
 
 it("sets up an app-event automation from chat, runs on a Composio event, and shows pause, skips, reconnect and undo", async () => {
   const planPath = join(fixture.info.dataDir, "room-plan.json");
-  const turns = () => existsSync(`${planPath}.evidence.jsonl`)
-    ? readFileSync(`${planPath}.evidence.jsonl`, "utf8").trim().split("\n").filter(Boolean).map((line) => JSON.parse(line))
-    : [];
+  const turns = () => readJsonLines(`${planPath}.evidence.jsonl`);
   const api = async (method: string, path: string, body?: unknown, status = 200) => {
     const response = await fetch(`${fixture.info.url}${path}`, {
       method, headers: { "content-type": "application/json", origin: fixture.info.url },

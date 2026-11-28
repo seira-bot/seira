@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { BotApiManager } from "./bot-api.ts";
 import { BOT_API_DEFAULT_WAIT_MS, createBotApiHost, type BotApiHostDeps, type BotApiTurnOptions } from "./bot-api-host.ts";
+import { PublicError } from "./public-error.ts";
 import type { RequestAuth } from "./request-auth.ts";
 import type { Message } from "./store.ts";
 import { assertWithinBudget, resetSpendCacheForTests } from "./spend.ts";
@@ -192,6 +193,20 @@ describe("the Bot API door on the webhook receiver", () => {
     expect(h.recorded.map((row) => (row as { action: string }).action)).toEqual(["bot-api.on", "bot-api.new-key"]);
   });
 
+  it("keeps the words of a refusal when switching it fails, and never sends the text of an error not written for the person", async () => {
+    const h = await harness(replies("x"));
+    vi.spyOn(h.manager, "enable").mockImplementationOnce(() => { throw new PublicError("The saved Bot API settings could not be read. Repair bot-api.json before changing them.", 503); });
+    expect(await h.app("POST", "/api/bots/b1/bot-api", { enabled: true })).toMatchObject({ status: 503, body: { error: expect.stringContaining("Repair bot-api.json") } });
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.spyOn(h.manager, "enable").mockImplementationOnce(() => { throw new Error("EACCES: permission denied, open '/Users/someone/.seira/bot-api.json.tmp'"); });
+    const failed = await h.app("POST", "/api/bots/b1/bot-api", { enabled: true });
+    expect(failed.status).toBe(500);
+    expect(failed.body.error).not.toContain("EACCES");
+    expect(failed.body.error).not.toContain("/Users/");
+    expect(String(logged.mock.calls[0]?.[0])).toContain("EACCES");
+    logged.mockRestore();
+  });
+
   it("stops at an approval the bot asks for and says so; the caller reads the thread again later", async () => {
     const h = await harness((fake, _botId, _prompt, opts) => {
       setTimeout(() => fake.store.appendMessage(opts.threadId, { role: "bot", kind: "options", card: { title: "Approval needed", subtitle: "Bash", options: ["Allow", "Deny"], requestId: "r1", requestType: "permission" } as never }), 30);
@@ -288,7 +303,7 @@ describe("the Bot API door on the webhook receiver", () => {
   });
 
   it("holds the maintenance claim only until the turn has started, and answers a refused claim in plain JSON", async () => {
-    let held = 0, refuse = false;
+    let held = 0, refuse: false | "public" | "internal" = false;
     const release = { count: 0 };
     const fake = fakeStore();
     const dir = mkdtempSync(join(tmpdir(), "seira-bot-api-claim-"));
@@ -297,7 +312,12 @@ describe("the Bot API door on the webhook receiver", () => {
       store: fake.store, manager: new BotApiManager({ file: join(dir, "bot-api.json") }), waitMs: 5_000,
       startTurn: async (_botId, _prompt, opts) => { held = release.count; setTimeout(() => { expect(release.count).toBe(1); opts.onSettled({ ok: true, text: "" }); }, 60); },
       threadBusy: () => false, canStart: () => true, canConfine: () => true, hooksBaseUrl: () => "https://x", manageRefusal: () => null,
-      claimRequest: () => { if (refuse) throw Object.assign(new Error("This Cloud moved"), { status: 409 }); return () => { release.count += 1; }; },
+      claimRequest: () => {
+        // The real claim refuses with a PublicError (a moved Cloud, a backup running); anything else is unexpected.
+        if (refuse === "public") throw Object.assign(new PublicError("This Cloud moved", 409), { code: "moved" });
+        if (refuse === "internal") throw new Error("EACCES: permission denied, open '/Users/someone/.seira/workspace-maintenance.lock'");
+        return () => { release.count += 1; };
+      },
     });
     const key = host.manager.enable("b1").key;
     const server = createServer((req, res) => { void createWebhookIngressHandler({} as WebhookManager, undefined, host.door)(req, res); });
@@ -308,10 +328,17 @@ describe("the Bot API door on the webhook receiver", () => {
     expect((await send()).status).toBe(200);
     expect(held).toBe(0);
     expect(release.count).toBe(1);
-    refuse = true;
+    refuse = "public";
     const refused = await send();
     expect(refused.status).toBe(409);
     expect(await refused.json()).toEqual({ error: "This Cloud moved" });
+    refuse = "internal";
+    const quiet = vi.spyOn(console, "error").mockImplementation(() => {});
+    const failed = await send();
+    expect(failed.status).toBe(500);
+    expect(await failed.json()).toEqual({ error: "Try again soon" });
+    expect(quiet.mock.calls.flat().join(" ")).toMatch(/Bot API request claim/);
+    quiet.mockRestore();
   });
 
   it("answers the licensed monthly spend limit with 429 and a Retry-After up to the next UTC month", async () => {

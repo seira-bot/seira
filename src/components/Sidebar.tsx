@@ -32,6 +32,7 @@ import { MIN_QUERY, SearchResults } from "./SearchResults";
 import { ImportDialog, ShareDepartmentDialog, TeamLibraryPanel } from "./lazy-screens";
 import { SidebarNewChatPanel } from "./SidebarNewChatPanel";
 import { openCommandPalette } from "./CommandPalette";
+import { shortcutLabel } from "./ShortcutHint";
 import { TeamSettingsDialog } from "./TeamSettingsDialog";
 import { TeamDialog } from "./TeamDialog";
 import { RenameTitle } from "./RenameTitle";
@@ -78,7 +79,7 @@ import { DesktopWorkspaceSwitcher, endCloudHowTo } from "./DesktopWorkspaceSwitc
 import { useCloudOwner } from "./CloudOwner"; import { OtherPlaceBots, OwnBotHomeMark } from "./OtherPlaceBots"; import { NewBotOtherPlaceItem, useNewBotHereLabel } from "./NewBotPlaceItems";
 import { SidebarSectionHeader } from "./SidebarSectionHeader";
 import { NeedsYouButton, OwnerPickerHost } from "./TeamOwner"; import { SidebarPeople } from "./SidebarPeople"; import { SidebarInboxRow } from "./SidebarInboxRow"; import { TeamSideSwitch, useTeamSideLists } from "./TeamSideSwitch"; import { SidebarActiveThreads } from "./SidebarActiveThreads"; import { setAttentionPinned, useAttentionPinned } from "./inbox/attention-pinned"; import { useInboxSupport } from "@/state/inbox";
-import { TeamMenuItems } from "./SidebarTeamMenu";
+import { TeamMenuItems } from "./SidebarTeamMenu"; import { useInviteHost } from "./SidebarInviteHost";
 import { MENU_ITEM, MENU_ITEM_SEPARATOR, MENU_SHEET } from "./menu-recipe";
 import { ELEVATED_CONTROL } from "./elevated";
 export { TeamMenuItems };
@@ -891,7 +892,7 @@ export const BotListItem = memo(function BotListItem(props: BotRowProps) {
         <span className={cn("pointer-events-none absolute size-2 rounded-full border border-panel bg-accent", railTile ? "right-1 top-1" : "bottom-1.5 right-1.5")} />
       )}
       {!renaming && !deleting && !iconOnly && <>
-        {showThreads && <button type="button" aria-label={t("task.newShort")} title={t("task.newShort")} onClick={() => { setThreadsOpen(true); dispatch({ type: "newTask", botId: bot.id }); }}
+        {showThreads && <button type="button" aria-label={t("task.newShort")} title={selected ? `${t("task.newShort")} (${shortcutLabel("new-thread")})` : t("task.newShort")} onClick={() => { setThreadsOpen(true); dispatch({ type: "newTask", botId: bot.id }); }}
           className="pointer-events-none absolute right-[3.75rem] top-1/2 flex size-7 -translate-y-1/2 items-center justify-center rounded text-ink-secondary opacity-0 hover:bg-raised hover:text-ink group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100 max-md:hidden touch:pointer-events-auto touch:opacity-70"><Plus size={14} /></button>}
         {showThreads && <button type="button" aria-label={t("folder.newNamed", { name: bot.name })} title={t("folder.new")} onClick={() => { setThreadsOpen(true); setCreatingProject(true); }}
           className="pointer-events-none absolute right-8 top-1/2 flex size-7 -translate-y-1/2 items-center justify-center rounded text-ink-secondary opacity-0 hover:bg-raised hover:text-ink group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100 max-md:hidden touch:pointer-events-auto touch:opacity-70"><FolderPlus size={14} /></button>}
@@ -937,7 +938,7 @@ export const Sidebar = memo(function Sidebar({ open, onClose, collapseToIcons = 
   const [newTeam, setNewTeam] = useState(false);
   const [teamMenu, setTeamMenu] = useState<{ name: string; x: number; y: number } | null>(null);
   const [teamSettings, setTeamSettings] = useState<string | null>(null);
-  const teamSettingsAllowed = useOwnerOrAdmin();
+  const teamSettingsAllowed = useOwnerOrAdmin(); const invite = useInviteHost();
   const teamMotion = useHeldMenuMotion(teamMenu);
   const teamMenuReturn = useRef<HTMLElement | null>(null);
   const closeTeamMenu = () => {
@@ -1519,7 +1520,7 @@ export const Sidebar = memo(function Sidebar({ open, onClose, collapseToIcons = 
           onNewFolder={setNewFolderBotId}
           onNewTaskFolder={setNewTaskFolderBotId}
           onRename={(botId) => setRenameRequest((current) => ({ botId, nonce: (current?.nonce ?? 0) + 1 }))}
-          onNewSection={density === "icons" ? undefined : (botId) => botDrag.startNew([botId])}
+          onNewSection={density === "icons" ? undefined : (botId) => botDrag.startNew([botId])} onInvite={invite.onBot}
         />
       {showThreads && newFolderBotId && state.bots.find((bot) => bot.id === newFolderBotId) && <BotProjectDialog bot={state.bots.find((bot) => bot.id === newFolderBotId)!} onClose={() => setNewFolderBotId(null)} />}
       {showThreads && newTaskFolderBot && <NewTaskFolderDialog bot={newTaskFolderBot} onClose={() => setNewTaskFolderBotId(null)} onReturnFocus={() => {
@@ -1528,7 +1529,7 @@ export const Sidebar = memo(function Sidebar({ open, onClose, collapseToIcons = 
       <ConfirmDialog {...botConfirmProps(confirm, state.bots, { archive: (bot) => { setConfirm(null); void archiveBot(bot); }, remove: (bot) => { setConfirm(null); dispatch({ type: "deleteBot", botId: bot.id }); },
         archiveInstead: (chief) => { setConfirm(null); void archiveBotWithNotice(chief, { bots: state.bots, selectedId: state.selectedId, dispatch, showThreads, notify: setTeamFeedback }); } })}
         onCancel={cancelConfirm} returnFocusRef={sidebarRef} />
-      <OwnerPickerHost />
+      <OwnerPickerHost />{invite.dialog}
       {newTeam && <TeamDialog onClose={() => setNewTeam(false)} />}
       {renameTeam && <TeamDialog section={renameTeam} rename onRenamed={sections.renamed} onClose={() => setRenameTeam(null)} />}
       {teamMotion.shown && teamMotion.value && createPortal(<div className={cn("fixed inset-0 z-40", teamMotion.closing && "pointer-events-none")} onMouseDown={closeTeamMenu}>
@@ -1542,7 +1543,7 @@ export const Sidebar = memo(function Sidebar({ open, onClose, collapseToIcons = 
             department={teamMotion.value!.name} onRead={closeTeamMenu} onAddBots={() => { closeTeamMenu(); setMoveToTeam(teamMotion.value!.name); }}
             onRename={() => { closeTeamMenu(); (advanced ? setRenameTeam : botDrag.startRename)(teamMotion.value!.name); }}
             onShare={() => { closeTeamMenu(); setShareTeam(teamMotion.value!.name); }}
-            onDelete={() => { closeTeamMenu(); setDeletingTeam(teamMotion.value!.name); }}
+            onDelete={() => { closeTeamMenu(); setDeletingTeam(teamMotion.value!.name); }} onInvite={invite.onDepartment && (() => { const name = teamMotion.value!.name; closeTeamMenu(); invite.onDepartment!(name); })}
             onSetForAll={teamSettingsAllowed === true ? () => { closeTeamMenu(); setTeamSettings(teamMotion.value!.name); } : undefined}
           />
         </div>

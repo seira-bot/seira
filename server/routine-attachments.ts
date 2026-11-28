@@ -1,6 +1,8 @@
 import { ROUTINE_RUN_LIMIT_MAX_MINUTES, ROUTINE_RUN_LIMIT_MIN_MINUTES } from "../shared/routines.ts";
 import { z } from "zod";
 
+import { PublicError } from "./public-error.ts";
+
 import type { RoutineContextAttachment } from "../shared/routines.ts";
 
 const MAX_ATTACHMENTS = 50;
@@ -15,15 +17,15 @@ const attachmentSchema = z.object({
 export function cleanAttachments(value: unknown): RoutineContextAttachment[] {
   if (value == null) return [];
   if (!Array.isArray(value) || value.length > MAX_ATTACHMENTS) {
-    throw new Error(`Add no more than ${MAX_ATTACHMENTS} attachments`);
+    throw new PublicError(`Add no more than ${MAX_ATTACHMENTS} attachments`);
   }
   const ids = new Set<string>();
   return value.map((candidate) => {
     const parsed = attachmentSchema.safeParse(candidate);
     if (!parsed.success || parsed.data.name.includes("\0") || parsed.data.path.includes("\0")) {
-      throw new Error("Choose a valid attachment");
+      throw new PublicError("Choose a valid attachment");
     }
-    if (ids.has(parsed.data.id)) throw new Error("Each attachment must be unique");
+    if (ids.has(parsed.data.id)) throw new PublicError("Each attachment must be unique");
     ids.add(parsed.data.id);
     return { ...parsed.data };
   });
@@ -54,7 +56,7 @@ export function attachmentsMalformed(owners: ReadonlyArray<{ attachments?: unkno
 export function cleanTimeoutMinutes(value: unknown): number | undefined {
   if (value == null) return undefined;
   if (typeof value !== "number" || !Number.isInteger(value) || value < ROUTINE_RUN_LIMIT_MIN_MINUTES || value > ROUTINE_RUN_LIMIT_MAX_MINUTES) {
-    throw new Error(`Run limit must be a whole number from ${ROUTINE_RUN_LIMIT_MIN_MINUTES} to ${ROUTINE_RUN_LIMIT_MAX_MINUTES} minutes`);
+    throw new PublicError(`Run limit must be a whole number from ${ROUTINE_RUN_LIMIT_MIN_MINUTES} to ${ROUTINE_RUN_LIMIT_MAX_MINUTES} minutes`);
   }
   return value;
 }

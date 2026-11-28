@@ -1,9 +1,10 @@
 // A burst end to end on the scripted engine: proposed by the bot's tool, started only by the person's press, fanned out, and merged in the parent chat.
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, it } from "vitest";
 import { launchVerificationServer, runControlSeira } from "../../scripts/control-seira.ts";
 import { request } from "../../scripts/mcp-server.ts";
+import { readJsonLines } from "../testing/json-lines.ts";
 
 const PARTS = ["Acme", "Globex", "Initech"];
 
@@ -23,8 +24,7 @@ it("previews, runs only on Run, and writes one merged result", async () => {
         { key: "PROPOSE", match: ["BURST-JOB"], steps: [{ tool: "burst", arguments: { task: "Research companies", instructions: "Find when it was founded.", items: PARTS } }], reply: "Press Run to start." },
       ] },
     }));
-    const evidence = (): any[] => existsSync(`${planPath}.evidence.jsonl`)
-      ? readFileSync(`${planPath}.evidence.jsonl`, "utf8").trim().split("\n").filter(Boolean).map((line) => JSON.parse(line)) : [];
+    const evidence = (): any[] => readJsonLines(`${planPath}.evidence.jsonl`);
     const lines = async () => (await api(`/api/threads/${bot.activeTaskId}/messages?limit=200`, undefined, "GET")).messages as any[];
     const cards = async () => (await lines()).filter((message) => message.kind === "burst").map((message) => message.burst);
     const card = async () => (await cards())[0];

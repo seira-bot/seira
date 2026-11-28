@@ -33,6 +33,20 @@ const controlHeaders = { "x-seira-control-token": CONTROL_TOKEN };
 
 const PROFILE = { name: "Ada Lovelace", email: "ada@example.com" };
 
+const CARD_MARKER = "fixture task card";
+const CARD_INPUT = {
+  intro: "Hi, good morning! Tasks I could help with:",
+  tasks: [
+    {
+      title: "Draft the weekly follow-up summary",
+      description: "You owe five follow-ups before the weekly meeting. I can draft the summary first.",
+      icon: "document",
+    },
+    { title: "Plan tomorrow's calendar", icon: "calendar" },
+    { title: "Sort the unread email", description: "Twelve messages wait since Monday.", icon: "mail" },
+  ],
+};
+
 const children = [];
 let home = "";
 
@@ -139,12 +153,16 @@ async function main() {
     },
   }));
 
+  const toolRoutes = join(home, "tool-routes.json");
+  writeFileSync(toolRoutes, JSON.stringify({ [CARD_MARKER]: [{ name: "suggest_tasks", server: "agents", input: CARD_INPUT }] }));
+
   console.log(`harness on ${HARNESS_PORT}, companion on ${COMPANION_PORT}`);
   const harness = start("harness", [join(ROOT, "server", "index.ts")], {
     HOME: home,
     USERPROFILE: home,
     SEIRA_PORT: String(HARNESS_PORT),
     FAKE_CLAUDE_MODE: "happy",
+    FAKE_CLAUDE_TOOL_ROUTES: toolRoutes,
     SEIRA_WEBHOOK_PORT: String(base + 1),
   });
   await waitFor(`${HARNESS}/api/health`, "harness", harness);
@@ -346,7 +364,99 @@ async function main() {
   if (memory.status !== 200) throw new Error(`could not read team memory: ${JSON.stringify(memory.body)}`);
   write("team-memory", memory.body);
 
+  await captureTaskSuggestions();
+
   console.log("\nnot captured: options-card.json — needs a real approval from a real turn");
+}
+
+// Ids and times differ per run: each distinct value maps to a stable stand-in in first-seen order.
+const TIME_KEYS = new Set(["at", "changedAt"]);
+const ID_KEYS = new Set(["id", "messageId", "threadId", "startedMessageId", "parentId", "activeLeafId"]);
+const pinRun = () => {
+  const ids = new Map();
+  const times = new Map();
+  const walk = (value, key) => {
+    if (Array.isArray(value)) return value.map((entry) => walk(entry, key));
+    if (value && typeof value === "object") {
+      return Object.fromEntries(Object.entries(value).map(([k, entry]) => [k, walk(entry, k)]));
+    }
+    if ((typeof value === "number" || typeof value === "string") && TIME_KEYS.has(key)) {
+      if (!times.has(value)) times.set(value, 1_700_000_000_000 + times.size * 1000);
+      const pinned = times.get(value);
+      return typeof value === "string" ? new Date(pinned).toISOString() : pinned;
+    }
+    if (typeof value === "string" && ID_KEYS.has(key) && !/^s[1-5]$/.test(value)) {
+      if (!ids.has(value)) ids.set(value, `fixture-${key.replace(/Id$/, "") || "id"}-${ids.size + 1}`);
+      return ids.get(value);
+    }
+    return value;
+  };
+  return (value) => walk(value);
+};
+
+const waitUntil = async (what, check) => {
+  const deadline = Date.now() + 20_000;
+  for (;;) {
+    const found = await check();
+    if (found) return found;
+    if (Date.now() > deadline) throw new Error(`timed out waiting for ${what}`);
+    await sleep(150);
+  }
+};
+
+async function captureTaskSuggestions() {
+  const created = await json(`${SIDECAR}/api/bots`, asDevice({
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ name: "Basil" }),
+  }));
+  const basil = created.body.bot;
+  if (!basil) throw new Error(`could not create Basil: ${JSON.stringify(created.body)}`);
+  const page = async () => (await json(`${SIDECAR}/api/threads/${basil.threadId}/messages?limit=50`, asDevice())).body;
+  const cardLine = async () => (await page()).messages?.find((m) => m.taskSuggestions);
+  const answer = (messageId, suggestionId, action) =>
+    json(`${SIDECAR}/api/bots/${basil.id}/task-suggestions`, asDevice({
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ threadId: basil.threadId, messageId, suggestionId, action }),
+    }));
+
+  const sent = await fetch(`${SIDECAR}/api/bots/${basil.id}/messages`, asDevice({
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ text: `Good morning, ${CARD_MARKER} please` }),
+  }));
+  if (!sent.ok) throw new Error(`could not send the card message: ${sent.status}`);
+  const card = await waitUntil("the task card", cardLine);
+  await waitUntil("the end of the card turn", async () =>
+    (await page()).messages?.some((m) => m.role === "bot" && !m.taskSuggestions && /hello from fake claude/.test(m.text ?? "")));
+  await sleep(500);
+
+  let hide, show, start;
+  const frames = await captureFrames(14, async () => {
+    hide = await answer(card.id, "s1", "hide");
+    show = await answer(card.id, "s1", "show");
+    start = await answer(card.id, "s1", "start");
+  });
+  const startAgain = await answer(card.id, "s1", "start");
+  const unknown = await answer(card.id, "s9", "hide");
+  await waitUntil("the Start turn", async () => (await page()).messages?.some((m) => m.fromTaskSuggestion));
+  const pageAfter = { body: await page() };
+
+  // Only the lines this card touches: the rest of a turn carries run-bound ids and timings.
+  const startedId = start.body.sent?.id;
+  const ours = (message) => message?.id === card.id || message?.id === startedId;
+  const cardFrames = frames
+    .filter((frame) => (frame.kind === "message.patch" && frame.message?.id === card.id) || (frame.kind === "message" && frame.message?.id === startedId))
+    .map(({ seq: _seq, ...frame }) => frame);
+  const pin = pinRun();
+  const fixture = pin({
+    card,
+    hide, show, start, startAgain, unknown,
+    frames: { status: 200, body: cardFrames },
+    page: { status: 200, body: { ...pageAfter.body, messages: pageAfter.body.messages.filter(ours) } },
+  });
+  write("task-suggestions", fixture);
 }
 
 const cleanup = () => {

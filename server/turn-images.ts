@@ -7,6 +7,7 @@ import { ATTACHMENTS_DIR, FILE_MAX_BYTES, IMAGE_MAX_BYTES } from "./attachments.
 import type { TurnImageInput, TurnVideoInput } from "./contracts.ts";
 import { decodeAttachmentAttribute } from "./message-file.ts";
 import { videoFrameImages } from "./turn-video.ts";
+import { PublicError } from "./public-error.ts";
 
 export const TURN_IMAGE_MAX_COUNT = 10;
 /** Total image bytes one turn may carry: the 40 MB it was when a turn took four images, so engine requests don't grow. */
@@ -48,7 +49,7 @@ const VIDEO_MIME_BY_EXTENSION: Readonly<Record<string, TurnVideoInput["mime"]>> 
 };
 
 function statusError(status: number, message: string): Error & { status: number } {
-  return Object.assign(new Error(message), { status });
+  return new PublicError(message, status);
 }
 
 function walk(node: MarkdownNode, visit: (node: MarkdownNode) => void): void {

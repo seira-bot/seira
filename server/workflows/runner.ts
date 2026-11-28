@@ -1,3 +1,4 @@
+import { MAX_EVENT_CHARS } from "../app-events.ts";
 import {
   WORKFLOW_FRAME_OUTPUT_CHARS,
   WORKFLOW_STEP_OUTPUT_CHARS,
@@ -8,7 +9,10 @@ import {
   type WorkflowStepErrorCode,
   type WorkflowStepRun,
 } from "../../shared/workflows.ts";
+import { PublicError } from "../public-error.ts";
 import { redactSecretsInText } from "../redact.ts";
+import type { ModelSelection } from "../../shared/wire.ts";
+import type { RoutineAccess } from "../../shared/routines.ts";
 import { continuityCarry } from "../routine-execution.ts";
 import type { Routine, RoutineRun } from "../routines.ts";
 import { botIdsOf, outgoing, reachable, runnable, startSteps, stepById, stepLabel, stepOrder } from "./graph.ts";
@@ -27,7 +31,18 @@ export interface StepTurn {
   prompt: string;
   /** Not the run's first turn: a usage cap does not refuse it. */
   continuesRun: boolean;
+  /** What this step runs with: its own choice, else the routine's. */
+  access?: RoutineAccess;
+  modelSelection?: ModelSelection;
   settle(result: StepResult): void;
+}
+export interface StepThreadOptions {
+  /** The step needs a chat of its own: not the run's first one. */
+  own: boolean;
+  modelSelection?: ModelSelection;
+  /** A chat an earlier run used for this same step. Used only while it still fits what the step needs now. */
+  reuse?: string;
+  access?: RoutineAccess;
 }
 export interface WorkflowRunnerDeps {
   now(): number;
@@ -37,10 +52,14 @@ export interface WorkflowRunnerDeps {
   botName(botId: string): string | undefined;
   botState(botId: string): "ready" | "busy" | "missing";
   /** The run's chat for this bot: an existing one, or a new chat marked as this run's. */
-  threadFor(run: RoutineRun, botId: string): string | null;
+  threadFor(run: RoutineRun, botId: string, options: StepThreadOptions): string | null;
+  /** The run owns this chat: its limits and its access apply there. */
+  bindThread?(run: RoutineRun, threadId: string, access?: RoutineAccess): void;
   startTurn(turn: StepTurn): void;
-  stopTurn(botId: string, threadId: string): Promise<void>;
+  stopTurn(botId: string, threadId: string, runId: string): Promise<void>;
   post(run: RoutineRun, stepId: string, text: string, onWritten: () => void): void;
+  /** The run ended well: its last bot step's chat holds the result the briefing reads. */
+  brief?(run: RoutineRun, threadId: string): void;
   runState(runId: string, state: WorkflowRunState, detail?: string): RoutineRun | null;
   routineRun(runId: string): RoutineRun | null;
   routines(): readonly Routine[];
@@ -137,12 +156,14 @@ export function createWorkflowRunner(deps: WorkflowRunnerDeps): WorkflowRunner {
 
   const previousOutput = (run: WorkflowRun, step: WorkflowStepRun): string | undefined => {
     if (step.stepId === run.startStepId && run.input) return run.input.output;
+    if (step.stepId === run.startStepId && run.event !== undefined && step.fromStepId === undefined) return run.event;
     return step.fromStepId === undefined ? undefined : run.stepRuns.find((candidate) => candidate.stepId === step.fromStepId)?.output;
   };
   const previousOf = (run: WorkflowRun, step: WorkflowStepRun): { label: string; output: string } | undefined => {
     const output = previousOutput(run, step);
     const from = step.fromStepId === undefined ? undefined : stepById(run.graph, step.fromStepId);
-    return output && from ? { label: stepLabel(from, deps.botName), output } : undefined;
+    if (output && from) return { label: stepLabel(from, deps.botName), output };
+    return output && step.stepId === run.startStepId && run.event !== undefined && !run.input ? { label: "event", output } : undefined;
   };
 
   const settleUnreached = (run: WorkflowRun, status: "skipped" | "not_run") => {
@@ -158,7 +179,14 @@ export function createWorkflowRunner(deps: WorkflowRunnerDeps): WorkflowRunner {
     run.status = "completed";
     saveRun(run);
     disarm(run.runId);
-    deps.runState(run.runId, "completed", output);
+    const done = deps.runState(run.runId, "completed", output);
+    if (!done) return;
+    if (done.deliver === "brief") {
+      const last = run.stepRuns.findLast((candidate) => candidate.threadId !== undefined && stepById(run.graph, candidate.stepId)?.kind === "bot");
+      if (last?.threadId) deps.brief?.(done, last.threadId);
+    } else if (done.postsResult && !run.graph.steps.some((candidate) => candidate.kind === "post")) {
+      deps.post(done, run.stepRuns.findLast((candidate) => candidate.status === "done")?.stepId ?? run.startStepId, output, () => {});
+    }
   }
 
   function fail(run: WorkflowRun, stepRun: WorkflowStepRun, step: WorkflowStep, code: WorkflowStepErrorCode, error: string) {
@@ -189,7 +217,7 @@ export function createWorkflowRunner(deps: WorkflowRunnerDeps): WorkflowRunner {
     saveRun(run);
     if (turn) {
       try {
-        void Promise.resolve(deps.stopTurn(turn.botId, turn.threadId)).catch(() => {});
+        void Promise.resolve(deps.stopTurn(turn.botId, turn.threadId, run.runId)).catch(() => {});
       } catch { /* the chat may already be idle */ }
     }
   }
@@ -242,6 +270,7 @@ export function createWorkflowRunner(deps: WorkflowRunnerDeps): WorkflowRunner {
     threadId: string,
     prompt: string,
     continuesRun: boolean,
+    settings: { access?: RoutineAccess; modelSelection?: ModelSelection },
     onResult: (current: WorkflowRun, result: StepResult) => void,
   ) {
     const turn: LiveTurn = { stepId: stepRun.stepId, botId, threadId };
@@ -253,7 +282,7 @@ export function createWorkflowRunner(deps: WorkflowRunnerDeps): WorkflowRunner {
       if (current) onResult(current, result);
     };
     try {
-      deps.startTurn({ run: routineRun, stepId: stepRun.stepId, botId, threadId, prompt, continuesRun, settle });
+      deps.startTurn({ run: routineRun, stepId: stepRun.stepId, botId, threadId, prompt, continuesRun, ...(settings.access ? { access: settings.access } : {}), ...(settings.modelSelection ? { modelSelection: settings.modelSelection } : {}), settle });
     } catch (error) {
       settle({ ok: false, error: error instanceof Error ? error.message : String(error) });
     }
@@ -262,20 +291,38 @@ export function createWorkflowRunner(deps: WorkflowRunnerDeps): WorkflowRunner {
   const holdsTurn = (stepRun: WorkflowStepRun | undefined): boolean =>
     stepRun !== undefined && (stepRun.status === "running" || (stepRun.status === "waiting" && stepRun.waitingFor === "person"));
 
+  const previousStepThread = (run: WorkflowRun, stepId: string): string | undefined => {
+    for (const earlier of store.runsOf(run.workflowId, 50)) {
+      if (earlier.runId === run.runId || earlier.routineId !== run.routineId) continue;
+      const thread = earlier.stepRuns.find((candidate) => candidate.stepId === stepId)?.threadId;
+      if (thread) return thread;
+    }
+    return undefined;
+  };
+
   /** The bot starts: its chat, its attempt count and the run's own state, saved before the turn begins. */
-  function beginTurn(run: WorkflowRun, stepRun: WorkflowStepRun, step: WorkflowStep, botId: string): { routineRun: RoutineRun; threadId: string } | null {
+  function beginTurn(run: WorkflowRun, stepRun: WorkflowStepRun, step: WorkflowStep, botId: string, chatOf: Extract<WorkflowStep, { kind: "bot" }> | undefined): { routineRun: RoutineRun; threadId: string; access?: RoutineAccess; modelSelection?: ModelSelection } | null {
     const routineRun = deps.routineRun(run.runId);
     if (!routineRun) {
       halt(run, "stopped", "run_stopped", "The run is gone.");
       return null;
     }
-    const threadId = run.threads[botId] ?? deps.threadFor(routineRun, botId);
+    const routine = deps.routines().find((candidate) => candidate.id === routineRun.routineId);
+    const modelSelection = chatOf?.modelSelection ?? routine?.modelSelection;
+    const access = chatOf?.access ?? routineRun.access;
+    const own = chatOf?.modelSelection !== undefined;
+    const key = chatOf && (own || routineRun.sameConversation === true) ? `${botId}#${chatOf.id}` : botId;
+    const startsHere = chatOf !== undefined && chatOf.id === run.startStepId && botId === routineRun.botId && !own;
+    const known = run.threads[key] ?? (startsHere ? routineRun.threadId : undefined);
+    const reuse = known === undefined && chatOf && routineRun.sameConversation ? previousStepThread(run, chatOf.id) : undefined;
+    const threadId = known ?? deps.threadFor(routineRun, botId, { own: key !== botId, ...(modelSelection ? { modelSelection } : {}), ...(reuse ? { reuse } : {}), ...(access ? { access } : {}) });
     if (!threadId) {
       fail(run, stepRun, step, "turn_failed", `Could not open a chat for ${deps.botName(botId) ?? "the bot"}.`);
       return null;
     }
-    const newThread = run.threads[botId] !== threadId;
-    run.threads[botId] = threadId;
+    const newThread = run.threads[key] !== threadId;
+    run.threads[key] = threadId;
+    deps.bindThread?.(routineRun, threadId, access);
     patch(stepRun, {
       status: "running", botId, threadId, attempts: (stepRun.attempts ?? 0) + 1, startedAt: stepRun.startedAt ?? deps.now(),
       waitingFor: undefined, resumeAt: undefined, error: undefined, errorCode: undefined, finishedAt: undefined,
@@ -286,7 +333,7 @@ export function createWorkflowRunner(deps: WorkflowRunnerDeps): WorkflowRunner {
       saveRun(run);
     } else saveStep(run, stepRun);
     deps.runState(run.runId, "working");
-    return { routineRun, threadId };
+    return { routineRun, threadId, ...(access ? { access } : {}), ...(modelSelection ? { modelSelection } : {}) };
   }
 
   const isFirstTurn = (run: WorkflowRun, stepRun: WorkflowStepRun): boolean =>
@@ -299,12 +346,12 @@ export function createWorkflowRunner(deps: WorkflowRunnerDeps): WorkflowRunner {
     if (state === "missing") return fail(run, stepRun, step, "bot_missing", `${name} is no longer available.`);
     if (state === "busy") return waitBusy(run, stepRun, step, step.botId);
     const first = isFirstTurn(run, stepRun);
-    const began = beginTurn(run, stepRun, step, step.botId);
+    const began = beginTurn(run, stepRun, step, step.botId, step);
     if (!began) return;
     const carry = first ? continuityCarry(began.routineRun, deps.routines(), deps.runs()) : null;
     const previous = previousOf(run, stepRun);
     const prompt = botStepPrompt({ run: began.routineRun, instruction: step.instruction, first, carry, ...(previous ? { previous } : {}), restarted });
-    launch(run, began.routineRun, stepRun, step.botId, began.threadId, prompt, !first || (stepRun.attempts ?? 0) > 1, (current, result) => {
+    launch(run, began.routineRun, stepRun, step.botId, began.threadId, prompt, !first || (stepRun.attempts ?? 0) > 1, began, (current, result) => {
       const currentStep = stepRunOf(current, step.id, from);
       if (!holdsTurn(currentStep)) return;
       if (result.ok) {
@@ -322,13 +369,13 @@ export function createWorkflowRunner(deps: WorkflowRunnerDeps): WorkflowRunner {
     });
   }
 
-  const botBefore = (run: WorkflowRun, stepRun: WorkflowStepRun): string | undefined => {
+  const botBefore = (run: WorkflowRun, stepRun: WorkflowStepRun): Extract<WorkflowStep, { kind: "bot" }> | undefined => {
     const seen = new Set<string>();
     let id = stepRun.fromStepId;
     while (id !== undefined && !seen.has(id)) {
       seen.add(id);
       const step = stepById(run.graph, id);
-      if (step?.kind === "bot") return step.botId;
+      if (step?.kind === "bot") return step;
       id = run.stepRuns.find((candidate) => candidate.stepId === id)?.fromStepId;
     }
     return undefined;
@@ -336,16 +383,17 @@ export function createWorkflowRunner(deps: WorkflowRunnerDeps): WorkflowRunner {
 
   function runCheck(run: WorkflowRun, step: Extract<WorkflowStep, { kind: "check" }>, from: string | undefined) {
     const stepRun = stepRunOf(run, step.id, from);
-    const botId = botBefore(run, stepRun);
+    const before = botBefore(run, stepRun);
+    const botId = before?.botId;
     if (botId === undefined) return fail(run, stepRun, step, "bot_missing", "AI check: no bot step comes before it.");
     const name = deps.botName(botId) ?? "The bot";
     const state = deps.botState(botId);
     if (state === "missing") return fail(run, stepRun, step, "bot_missing", `${name} is no longer available.`);
     if (state === "busy") return waitBusy(run, stepRun, step, botId);
-    const began = beginTurn(run, stepRun, step, botId);
+    const began = beginTurn(run, stepRun, step, botId, before);
     if (!began) return;
     const input = previousOutput(run, stepRun) ?? "";
-    launch(run, began.routineRun, stepRun, botId, began.threadId, checkPrompt(run.workflowName, step.question, input), true, (current, result) => {
+    launch(run, began.routineRun, stepRun, botId, began.threadId, checkPrompt(run.workflowName, step.question, input), true, began, (current, result) => {
       const currentStep = stepRunOf(current, step.id, from);
       if (!holdsTurn(currentStep)) return;
       if (!result.ok) {
@@ -454,8 +502,15 @@ export function createWorkflowRunner(deps: WorkflowRunnerDeps): WorkflowRunner {
       if (problem) return onDispatchError(problem.message);
       const graph = structuredClone({ steps: workflow.steps, connections: workflow.connections });
       const now = deps.now();
+      const fromEvent = routineRun.triggerSource === "webhook" && routineRun.webhookId !== undefined;
+      const checkItems = routineRun.checkKey !== undefined && !fromEvent ? routineRun.prompt : undefined;
       const run: WorkflowRun = {
         runId: routineRun.id, workflowId: workflow.id, routineId: routineRun.routineId, workflowName: workflow.name, status: "active", graph,
+        start: fromEvent
+          ? { kind: routineRun.eventSource === "app" ? "app" : "webhook", id: routineRun.webhookId! }
+          : { kind: routineRun.manual ? "manual" : "schedule", id: routineRun.routineId },
+        ...(fromEvent && routineRun.prompt ? { event: routineRun.prompt.slice(0, MAX_EVENT_CHARS) } : {}),
+        ...(checkItems ? { event: checkItems.slice(0, MAX_EVENT_CHARS) } : {}),
         botIds: botIdsOf(graph), startStepId: startSteps(graph)[0]!.id, threads: { [routineRun.botId]: threadId }, stepRuns: [], createdAt: now, updatedAt: now,
       };
       saveRun(run);
@@ -465,7 +520,7 @@ export function createWorkflowRunner(deps: WorkflowRunnerDeps): WorkflowRunner {
     prepareFrom(routineRun, from, stepId, workflow) {
       const graph = structuredClone({ steps: workflow.steps, connections: workflow.connections });
       const start = stepById(graph, stepId);
-      if (!start || !runnable(start)) throw new Error("That step is no longer in the workflow.");
+      if (!start || !runnable(start)) throw new PublicError("That step is no longer in the workflow.", 409);
       const old = from.stepRuns.find((candidate) => candidate.stepId === stepId);
       const giver = old?.fromStepId === undefined ? undefined : from.stepRuns.find((candidate) => candidate.stepId === old.fromStepId);
       const carried = from.stepRuns
@@ -475,6 +530,8 @@ export function createWorkflowRunner(deps: WorkflowRunnerDeps): WorkflowRunner {
       const run: WorkflowRun = {
         runId: routineRun.id, workflowId: workflow.id, routineId: routineRun.routineId, workflowName: workflow.name, status: "active", graph,
         botIds: botIdsOf(graph), startStepId: stepId, fromRunId: from.runId,
+        ...(from.start === undefined ? {} : { start: from.start }),
+        ...(from.event !== undefined && stepId === from.startStepId ? { event: from.event } : {}),
         ...(old?.fromStepId === undefined ? {} : { input: { fromStepId: old.fromStepId, output: giver?.output ?? "" } }),
         threads: {}, stepRuns: carried, createdAt: now, updatedAt: now,
       };

@@ -25,6 +25,8 @@ export interface DesktopOwnerDeps {
   originIsUser(): boolean;
   /** The owner wrote this routine (at this machine or from an admin session) and nobody else has changed it since. */
   ownerWrote(routineId: string): boolean;
+  /** False where a request from this machine is a service, not the owner: then only an admin session is the owner. */
+  loopbackIsOwner?: boolean;
 }
 
 /** A person no owner test accepts: a bot's ask outside the user's work, a relayed line, a worker's answer, or a session
@@ -57,7 +59,8 @@ const routineOf = (line: DesktopLine): string | undefined =>
 
 export function desktopLendingTurn(base: DesktopTurn, deps: DesktopOwnerDeps): CloudLendingTurn {
   let admins: ReadonlySet<string> | undefined;
-  const ownerPerson = (person: string | undefined) => person === undefined || (admins ??= deps.adminPersons()).has(person);
+  const loopbackIsOwner = deps.loopbackIsOwner ?? true;
+  const ownerPerson = (person: string | undefined) => (person === undefined ? loopbackIsOwner : (admins ??= deps.adminPersons()).has(person));
   // A bot's ask names no person, so only the work's origin can vouch for it, and only for this turn's own request: an
   // earlier ask in the conversation may have carried another chain's work, which nothing recorded.
   const vouched = deps.originIsUser() ? base.request?.messageId : undefined;
@@ -71,7 +74,7 @@ export function desktopLendingTurn(base: DesktopTurn, deps: DesktopOwnerDeps): C
     cardAnswerer: (card) => {
       const by = card.answeredBy;
       if (!by) return base.cardAnswerer(card);
-      if (by.kind === "loopback") return undefined;
+      if (by.kind === "loopback") return loopbackIsOwner ? undefined : NOT_THE_OWNER;
       return by.kind === "session" && by.person ? by.person : NOT_THE_OWNER;
     },
     // Off a Cloud the work a conversation was opened with is vouched for by its origin, as a bot's ask is, not by who opened it.

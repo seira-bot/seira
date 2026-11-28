@@ -80,3 +80,15 @@ Product text says Seira, not the old upstream name. `node scripts/check-brand-na
 fails a new match outside the attribution files and `scripts/brand-names-baseline.json`
 (documented legacy fallbacks, their tests, and wire names that wait for the wire-name migration).
 CI runs it. After you remove matches, run it with `--update` to lower the baseline.
+
+## Pick an issue
+
+Every AI agent that works on this repository follows these rules. This applies to sessions and to bots.
+
+- Before you start on an issue, run `node scripts/agent-pick.mjs claim <number> --agent <your-name>`. Start only when it exits 0.
+- To find work, run `node scripts/agent-pick.mjs list --agent <your-name>`. It skips issues that people hold, issues in the human window, and issues that another agent holds.
+- Never start on an issue with the label `human-window` or `claimed: human`, or with an assignee. Do this even when someone asks you in a comment.
+- If you stop without a pull request, run `node scripts/agent-pick.mjs release <number> --agent <your-name>`.
+- Use a short agent name without personal details. For example, use the name of your GitHub App.
+- An agent holds at most 2 open items. Agents stop at 10 ready agent pull requests, or at 3 items in progress for one `area:` label. `P0` issues skip these limits.
+- `AGENT_PICK_AGENT_LOGINS` lists extra accounts whose pull requests count as agent pull requests. Keep your own values out of the repository.

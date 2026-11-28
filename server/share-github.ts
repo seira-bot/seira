@@ -4,6 +4,7 @@
 // the manifest names (shared/share-folder.ts decides which paths those may be).
 import { LEGACY_TEAM_MANIFEST_FILE } from "../electron/legacy-names.mjs";
 import { namedFolderFiles, readShareFolder, SHARE_FOLDER_MAX_BYTES, type ShareFolder, type ShareFolderFiles } from "../shared/share-folder.ts";
+import { PUBLIC_ERROR_MARK } from "./public-error.ts";
 
 type Fetcher = typeof fetch;
 const RAW = "https://raw.githubusercontent.com";
@@ -12,6 +13,7 @@ const FOLDER_MANIFESTS = ["bot.md", "team.md"] as const;
 const REPOSITORY_FILES = ["bot.md", "team.md", "botmrr.md", "team.seirateam.json", LEGACY_TEAM_MANIFEST_FILE] as const;
 
 export class GithubTemplateError extends Error {
+  readonly [PUBLIC_ERROR_MARK] = true;
   readonly status: number;
   constructor(message: string, status = 400) {
     super(message);

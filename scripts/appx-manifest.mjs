@@ -6,6 +6,12 @@ const root = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 export const STARTUP_TASK_ID = "SeiraStartup";
 
+/** A program outside the package (an agent engine) may start the package's executable only through an app execution
+ * alias: Windows refuses that program a start by the full path under WindowsApps. */
+export const APP_EXECUTION_ALIAS = "seira-desktop.exe";
+
+const UAP3_NAMESPACE = "http://schemas.microsoft.com/appx/manifest/uap/windows10/3";
+
 const PART_MAX = 65535;
 
 export function storeVersion(version) {
@@ -26,20 +32,33 @@ function startupExtension(executable) {
   );
 }
 
+function aliasExtension(executable) {
+  return (
+    `<uap3:Extension Category="windows.appExecutionAlias" Executable="${executable}" EntryPoint="Windows.FullTrustApplication">` +
+    `<uap3:AppExecutionAlias><desktop:ExecutionAlias Alias="${APP_EXECUTION_ALIAS}" /></uap3:AppExecutionAlias>` +
+    `</uap3:Extension>`
+  );
+}
+
+function addExtension(xml, extension) {
+  if (/<Extensions\s*\/>/.test(xml)) return xml.replace(/<Extensions\s*\/>/, `<Extensions>${extension}</Extensions>`);
+  if (xml.includes("</Extensions>")) return xml.replace("</Extensions>", `${extension}</Extensions>`);
+  if (xml.includes("</Application>")) return xml.replace("</Application>", `<Extensions>${extension}</Extensions></Application>`);
+  throw new Error("AppxManifest.xml has no Application element");
+}
+
 export function rewriteManifest(xml, { version }) {
   const mapped = storeVersion(version);
   let out = xml.replace(/(<Identity\b[^>]*?\bVersion=")[^"]*(")/, `$1${mapped}$2`);
   if (!out.includes(`Version="${mapped}"`)) throw new Error("AppxManifest.xml has no Identity Version");
-  if (/Category="windows\.startupTask"/.test(out)) return out;
 
   const executable = /<Application\b[^>]*?\bExecutable="([^"]*)"/.exec(out)?.[1];
   if (!executable) throw new Error("AppxManifest.xml has no Application Executable");
-  const extension = startupExtension(executable);
-
-  if (/<Extensions\s*\/>/.test(out)) out = out.replace(/<Extensions\s*\/>/, `<Extensions>${extension}</Extensions>`);
-  else if (out.includes("</Extensions>")) out = out.replace("</Extensions>", `${extension}</Extensions>`);
-  else if (out.includes("</Application>")) out = out.replace("</Application>", `<Extensions>${extension}</Extensions></Application>`);
-  else throw new Error("AppxManifest.xml has no Application element");
+  if (!/Category="windows\.startupTask"/.test(out)) out = addExtension(out, startupExtension(executable));
+  if (!/Category="windows\.appExecutionAlias"/.test(out)) {
+    if (!/\bxmlns:uap3=/.test(out)) out = out.replace(/<Package\b/, `<Package xmlns:uap3="${UAP3_NAMESPACE}"`);
+    out = addExtension(out, aliasExtension(executable));
+  }
   return out;
 }
 

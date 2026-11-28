@@ -1,0 +1,265 @@
+name: snap publish
+
+# Uploads the desktop snap `seira` to the Snap Store (docs/releasing.md). It follows the pattern of npm-publish.yml.
+# - A published release (not a draft, not a prerelease) starts it. The `redispatch` job runs this workflow again on `main`
+#   with the `stable` channel. By hand, `tag` names the release tag and `channel` is `stable`, `candidate`, `beta` or `edge`.
+# - Only a run on `main` goes on. A run on another ref fails in the `commit` job and never reaches a credential.
+# - The `commit` job resolves the tag once to a commit SHA. It checks that the SHA is in the history of `main`.
+#   For the `stable` channel, it also needs a published release that is not a prerelease for that tag.
+#   The later jobs use the SHA, never the tag name.
+# - The `gate` job runs scripts/release-gate.mjs on that SHA. A run that passes needs no person.
+#   A run that the gate flags waits for the wait timer of the `release-approval` environment, in the same attempt.
+#   A run that the gate refuses does not build.
+# - The `build` job has no secret. It builds the snap from the SHA and checks it with scripts/check-snap.mjs.
+# - The `publish` job uses the `snap-store` environment, and runs only after the gate, the approval and the build.
+#   Only that job reads SNAPCRAFT_STORE_CREDENTIALS. It fails with a clear message when the secret is missing.
+#   It runs no code of the repository. It uploads the file that `build` made.
+# scripts/ci-workflow.test.ts holds these rules.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: The release tag to upload, like v0.1.194. It must match the version in package.json.
+        required: true
+        type: string
+      channel:
+        description: The Snap Store channel.
+        required: true
+        default: stable
+        type: choice
+        options: [stable, candidate, beta, edge]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: snap-publish
+  cancel-in-progress: false
+
+jobs:
+  redispatch:
+    name: start the run on main
+    if: ${{ github.event_name == 'release' && !github.event.release.draft && !github.event.release.prerelease }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      - name: Start this workflow again on main
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: gh workflow run snap-publish.yml --repo "$GITHUB_REPOSITORY" --ref main -f tag="$TAG" -f channel=stable
+
+  commit:
+    name: find the commit to publish
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      sha: ${{ steps.sha.outputs.sha }}
+      tag: ${{ steps.sha.outputs.tag }}
+      channel: ${{ steps.sha.outputs.channel }}
+    steps:
+      - name: Find the commit of the tag
+        id: sha
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REF: ${{ github.ref }}
+          TAG: ${{ inputs.tag }}
+          CHANNEL: ${{ inputs.channel }}
+        run: |
+          set -euo pipefail
+          if [ "$REF" != "refs/heads/main" ]; then
+            echo "::error::This workflow reads store credentials. Run it from main, not from $REF."
+            exit 1
+          fi
+          if ! [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::The tag must look like v1.2.3."
+            exit 1
+          fi
+          case "$CHANNEL" in
+            stable|candidate|beta|edge) ;;
+            *) echo "::error::The channel must be stable, candidate, beta or edge."; exit 1 ;;
+          esac
+          lines=$(git ls-remote "https://github.com/$GITHUB_REPOSITORY.git" "refs/tags/$TAG" "refs/tags/$TAG^{}")
+          # An annotated tag lists its commit on the line that ends in ^{}. A light tag lists it on the plain line.
+          sha=$(awk -v peeled="refs/tags/$TAG^{}" '$2 == peeled { print $1 }' <<<"$lines")
+          [ -n "$sha" ] || sha=$(awk -v plain="refs/tags/$TAG" '$2 == plain { print $1 }' <<<"$lines")
+          if ! [[ "$sha" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::The repository has no commit for this tag."
+            exit 1
+          fi
+          # The commit must be in the history of main. `behind` and `identical` mean that main holds it.
+          position=$(gh api "repos/$GITHUB_REPOSITORY/compare/main...$sha" --jq .status)
+          case "$position" in
+            identical|behind) ;;
+            *) echo "::error::The commit of $TAG is not in the history of main (status: $position)."; exit 1 ;;
+          esac
+          if [ "$CHANNEL" = "stable" ]; then
+            # A draft release is not visible to this token, so it counts as missing.
+            if ! state=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" --jq '[.draft, .prerelease] | @tsv'); then
+              echo "::error::The stable channel needs a published GitHub release for $TAG. None was found."
+              exit 1
+            fi
+            if [ "$state" != $'false\tfalse' ]; then
+              echo "::error::The stable channel needs a published release that is not a draft and not a prerelease."
+              exit 1
+            fi
+          fi
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "channel=$CHANNEL" >> "$GITHUB_OUTPUT"
+          echo "Tag \`$TAG\` is commit \`$sha\`. Channel: \`$CHANNEL\`." >> "$GITHUB_STEP_SUMMARY"
+
+  gate:
+    name: release gate
+    needs: commit
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      pass: ${{ steps.gate.outputs.pass }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Run the release gate
+        id: gate
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_HUMAN_REVIEWERS: ${{ vars.RELEASE_HUMAN_REVIEWERS }}
+          TAG: ${{ needs.commit.outputs.tag }}
+          SHA: ${{ needs.commit.outputs.sha }}
+        run: |
+          set -uo pipefail
+          node scripts/release-gate.mjs --tag "$TAG" --sha "$SHA" && status=0 || status=$?
+          case "$status" in
+            0) echo "pass=true" >> "$GITHUB_OUTPUT" ;;
+            1) echo "pass=false" >> "$GITHUB_OUTPUT" ;;
+            *) exit 1 ;;
+          esac
+
+  approval:
+    name: approval for a run that the gate flagged
+    needs: gate
+    if: ${{ needs.gate.outputs.pass == 'false' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    environment: release-approval
+    permissions: {}
+    outputs:
+      attempt: ${{ github.run_attempt }}
+    steps:
+      - run: echo "The wait of the release-approval environment ended."
+
+  build:
+    name: build and check the snap
+    needs: [commit, gate, approval]
+    if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && needs.commit.result == 'success' && needs.gate.result == 'success' && (needs.gate.outputs.pass == 'true' || (needs.approval.result == 'success' && needs.approval.outputs.attempt == github.run_attempt)) }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    outputs:
+      file: ${{ steps.snap.outputs.file }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.commit.outputs.sha }}
+          persist-credentials: false
+      - uses: pnpm/action-setup@ff378ebe6b225b0680b81c1ad4498ae0d1d3a5e3 # v6.0.10
+        with:
+          cache: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          # A published package must not read a dependency cache that another run wrote.
+          package-manager-cache: false
+
+      - name: Check the version
+        shell: bash
+        env:
+          TAG: ${{ needs.commit.outputs.tag }}
+          SHA: ${{ needs.commit.outputs.sha }}
+        run: |
+          set -euo pipefail
+          version=$(node -p "require('./package.json').version")
+          echo "tag: $TAG, version: $version, commit: $(git rev-parse HEAD)"
+          [ "$(git rev-parse HEAD)" = "$SHA" ] || { echo "::error::The checkout is not the commit $SHA."; exit 1; }
+          [ "$TAG" = "v$version" ] || { echo "::error::tag $TAG holds package.json version $version"; exit 1; }
+
+      - name: Install the squashfs tools
+        run: sudo apt-get update && sudo apt-get install -y squashfs-tools
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Build the snap
+        env:
+          NODE_OPTIONS: --max-old-space-size=6144
+        run: pnpm package:snap
+
+      - name: Check the snap
+        id: snap
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          snaps=(release/*.snap)
+          [ "${#snaps[@]}" -eq 1 ] || { echo "::error::Expected one .snap file in release/, found ${#snaps[@]}."; exit 1; }
+          node scripts/check-snap.mjs "${snaps[0]}"
+          echo "file=$(basename "${snaps[0]}")" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: snap
+          path: release/*.snap
+          if-no-files-found: error
+          retention-days: 1
+
+  publish:
+    name: upload to the Snap Store
+    needs: [commit, gate, approval, build]
+    if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && needs.commit.result == 'success' && needs.build.result == 'success' && needs.gate.result == 'success' && (needs.gate.outputs.pass == 'true' || (needs.approval.result == 'success' && needs.approval.outputs.attempt == github.run_attempt)) }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment: snap-store
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: snap
+          path: snap
+
+      - name: Install snapcraft
+        run: sudo snap install snapcraft --classic
+
+      - name: Upload to the Snap Store
+        shell: bash
+        env:
+          SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
+          FILE: ${{ needs.build.outputs.file }}
+          CHANNEL: ${{ needs.commit.outputs.channel }}
+          TAG: ${{ needs.commit.outputs.tag }}
+          SHA: ${{ needs.commit.outputs.sha }}
+        run: |
+          set -euo pipefail
+          if [ -z "${SNAPCRAFT_STORE_CREDENTIALS:-}" ]; then
+            echo "::error::The secret SNAPCRAFT_STORE_CREDENTIALS is missing in the snap-store environment. Nothing was uploaded. See docs/releasing.md, Publish to the Snap Store."
+            exit 1
+          fi
+          snapcraft upload "snap/$FILE" --release="$CHANNEL"
+          echo "Uploaded \`$FILE\` for \`$TAG\` (commit \`$SHA\`) to the \`$CHANNEL\` channel of the Snap Store." >> "$GITHUB_STEP_SUMMARY"

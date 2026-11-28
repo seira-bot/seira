@@ -8,6 +8,7 @@ import { MEETING_TOOL_NAMES } from "../server/drivers/agents-meeting-tools.ts";
 import { CORE_TOOLS } from "../server/drivers/agents-tool-groups.ts";
 import { RELEASE_NOTES } from "../src/lib/release-notes.ts";
 import { APP_FEATURE_DOES_MAX, APP_FEATURES, findAppFeatures, INTERNAL_AGENT_TOOLS } from "./app-features.ts";
+import { GITHUB_APP_TOOL_NAMES } from "./github-app.ts";
 import { AUTOMATION_VIEWS } from "./automation-views.ts";
 import { BUILT_IN_SLASH_COMMANDS } from "./skill-command.ts";
 import { MENTION_ROW_KINDS } from "../src/lib/mention-row-kinds.ts";
@@ -15,7 +16,7 @@ import { MENTION_ROW_KINDS } from "../src/lib/mention-row-kinds.ts";
 const FIX = "Add or update its entry in shared/app-features.ts, so a bot can tell the person where it is and what it does.";
 const golden = JSON.parse(readFileSync(fileURLToPath(new URL("../server/drivers/agents-catalog-goldens/full.tools-list.json", import.meta.url)), "utf8")) as { tools: Array<{ name: string }> };
 const everyProfileOn = { skillAuthoring: true, sharedComputers: true, voiceNotes: true, xResearch: true, research: true, cloudHome: false, memoryEnabled: true, chief: true, botId: WATCHER_OPTIONS_CARD_BOT_ID, team: true, seira: true, computerSelection: true, imageGeneration: true, meetings: true, appHosting: true };
-const agentTools = new Set([...golden.tools.map((tool) => tool.name), ...availableTools(everyProfileOn).map((tool) => tool.name), ...CORE_TOOLS, ...MEETING_TOOL_NAMES]);
+const agentTools = new Set([...golden.tools.map((tool) => tool.name), ...availableTools(everyProfileOn).map((tool) => tool.name), ...CORE_TOOLS, ...MEETING_TOOL_NAMES, ...GITHUB_APP_TOOL_NAMES]);
 const claimed = new Set(APP_FEATURES.flatMap((feature) => feature.tools ?? []));
 const releaseNoteIds = RELEASE_NOTES.flatMap((note) => note.items.map((item) => item.id));
 
@@ -81,6 +82,20 @@ describe("app feature catalog", () => {
   });
 });
 
+describe("where people are invited", () => {
+  const place = (id: string) => APP_FEATURES.find((feature) => feature.id === id)!.place;
+
+  it("AC-01 names the places that invite and says the desktop app's own computer has none", () => {
+    expect(place("people-access")).toMatch(/self-hosted server with email sign-in, in a browser or in the desktop app through Connect to a server/);
+    expect(place("people-access")).toMatch(/Team Cloud/);
+    expect(place("people-access")).toMatch(/desktop app's own computer has no invite/);
+  });
+
+  it("AC-02 says the Premium key is set on a self-hosted server", () => {
+    expect(place("premium-key")).toBe("Settings → People, on a self-hosted server");
+  });
+});
+
 describe("findAppFeatures", () => {
   it("finds a feature by the person's words, best match first", () => {
     expect(findAppFeatures("workflow")[0]!.id).toBe("workflows");
@@ -99,5 +114,19 @@ describe("findAppFeatures", () => {
   it("returns every feature when the query has no usable words", () => {
     expect(findAppFeatures("")).toEqual([...APP_FEATURES]);
     expect(findAppFeatures("  the  ")).toEqual([...APP_FEATURES]);
+  });
+
+  it("AC-10: says that a bot sets the AI pool when asked and only the person adds a pay-per-use AI", () => {
+    const feature = APP_FEATURES.find((one) => one.id === "ai-pool")!;
+    expect(feature.place).toBe("Settings → AI → AI pool");
+    expect(feature.does).toMatch(/bot sets it when you ask/i);
+    expect(feature.does).toMatch(/only you add a pay-per-use AI/i);
+    expect(feature.releaseNotes).toEqual(expect.arrayContaining(["aiPool", "aiPoolEasy", "aiPoolBot"]));
+  });
+
+  it("finds the AI pool first", () => {
+    for (const query of ["AI pool", "AI Pool", "pool AI", "pool", "pool akun"]) {
+      expect(findAppFeatures(query)[0]?.id, query).toBe("ai-pool");
+    }
   });
 });

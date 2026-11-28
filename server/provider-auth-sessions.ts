@@ -1,5 +1,6 @@
 // An in-progress login belongs to the admin session that started it: never put its device code on global SSE.
 import type { ProviderAuthenticationStart, ProviderInstance } from "./contracts.ts";
+import { PublicError } from "./public-error.ts";
 
 type LoginInstance = Pick<ProviderInstance, "instanceId" | "startAuthentication" | "getAuthentication" | "completeAuthentication" | "cancelAuthentication" | "signOut">;
 type Flow = {
@@ -13,7 +14,7 @@ type Flow = {
   revision: number;
 };
 
-const failure = (message: string, status: number) => Object.assign(new Error(message), { status });
+const failure = (message: string, status: number) => new PublicError(message, status);
 
 export class ProviderAuthSessions {
   private readonly flows = new Map<string, Flow>();

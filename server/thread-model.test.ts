@@ -6,6 +6,7 @@ import { DATA_DIR } from "./config.ts";
 import type { ModelSelection, ProviderSnapshot } from "./contracts.ts";
 import { Store, toWireTask, type BotRecord, type TaskRecord } from "./store.ts";
 import { threadModelFallback, type ThreadEngine } from "./thread-model.ts";
+import { UnreadableBotsError } from "./unreadable-bots.ts";
 import type { TeamSetupRequest } from "../shared/team-setup.ts";
 import { readRegistry, writeRegistry } from "./testing/registry.ts";
 
@@ -118,7 +119,7 @@ describe("threads follow their bot's model", () => {
   it("the cleanup waits for a bot list it can read", () => {
     mkdirSync(DATA_DIR, { recursive: true });
     writeFileSync(join(DATA_DIR, "bots.json"), "{ not json");
-    open();
+    expect(() => open()).toThrow(UnreadableBotsError);
     const bot = {
       id: "legacy", threadId: "copy", name: "Legacy", title: "", description: "", soul: "", notifications: true, color: "#000",
       unread: false, modelSelection: sonnet, resumeCursors: {}, createdAt: 1,

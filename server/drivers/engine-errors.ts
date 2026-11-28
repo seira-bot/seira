@@ -6,7 +6,7 @@ import { chatNotice, noticeFailure } from "../chat-notices.ts";
 import { redactSecretsInText } from "../redact.ts";
 import { hostTimeZone } from "../turn-clock.ts";
 import { toolCountLimitFromError } from "../tool-count-limit.ts";
-import { MODEL_NO_ROUTE, USAGE_LIMIT } from "./retry.ts";
+import { HISTORY_FILE_REF, MODEL_NO_ROUTE, USAGE_LIMIT } from "./retry.ts";
 
 /** How long an engine may stay quiet after a model request failed on a limit before the turn is ended as a usage limit,
  * so a backup the person chose carries on (or the bot waits for the reset): longer than any retry an engine makes without a provider's retry-after
@@ -26,7 +26,7 @@ export const usageLimitWait = (status: number | null | undefined, waitMs: number
 const CONTEXT_OVERFLOW = /\bprompt is too long\b|\bautomatic compaction failed\b|\bautocompact is thrashing\b/i;
 export const contextOverflow = (text: string): boolean => CONTEXT_OVERFLOW.test(text);
 
-export type EngineFailureKind = "credits" | "usage_limit" | "rate_limit" | "overloaded" | "server" | "tool_schema" | "tool_count" | "model_no_route" | "refused";
+export type EngineFailureKind = "credits" | "usage_limit" | "rate_limit" | "overloaded" | "server" | "tool_schema" | "tool_count" | "model_no_route" | "history_rejected" | "refused";
 
 /** A provider refusing for want of credit or payment, in its own words (402 is read from the status). */
 const OUT_OF_CREDITS = /\bpayment required\b|\binsufficient (?:account )?(?:funds|balance|credits?)\b|\b(?:credit|account) balance is too low\b|\bout of credits?\b|\bno credits? (?:left|remaining)\b|\bused all (?:available |of (?:your|its) )?credits\b/i;
@@ -100,6 +100,7 @@ export function engineFailureKind(text: string, status = httpStatusOf(text)): En
   if (TOOL_SCHEMA.test(text)) return "tool_schema";
   if (toolCountLimitFromError(text) !== undefined) return "tool_count";
   if (MODEL_NO_ROUTE.test(text)) return "model_no_route";
+  if (HISTORY_FILE_REF.test(text)) return "history_rejected";
   if (status !== null) return status >= 500 ? "server" : "refused";
   return null;
 }
@@ -155,6 +156,8 @@ export function engineFailure(
       const model = NO_ROUTE_MODEL.exec(text)?.[1];
       return model ? noticeFailure("chat.notice.modelNoRoute", { provider, model }) : noticeFailure("chat.notice.modelNoRouteUnnamed", { provider });
     }
+    // The provider's own reason stays in the sentence: classifyError (retry.ts) reads it, so this stays a final failure.
+    case "history_rejected": return { message: `${provider} refused the history of this thread${detail(says)}, so running it again with the same history fails the same way. A new thread starts without that history, but this does not always fix it.` };
     case "refused": return { message: `${provider} stopped with an error${detail(code, says)}.` };
   }
 }

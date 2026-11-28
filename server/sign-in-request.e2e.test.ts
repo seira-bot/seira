@@ -1,11 +1,12 @@
 // Nothing here reaches a real browser, the user's data or port 8799.
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, it } from "vitest";
 import { launchVerificationServer, runControlSeira } from "../scripts/control-seira.ts";
 import { removeTempDir } from "./testing/cleanup.ts";
 import { openSse } from "./testing/sse.ts";
+import { readJsonLines } from "./testing/json-lines.ts";
 
 const asked = (turn: any): string => JSON.stringify(turn.prompt?.message?.content ?? "");
 const ASKED_REPLY = "I asked you to sign in to example.com; I will continue once you have.";
@@ -20,8 +21,7 @@ async function signInFixture() {
   const fixture = await launchVerificationServer({}, undefined, undefined, { binaryPath, executablePath: join(tools, "chrome") }, undefined, { scripted: true });
   const url = fixture.info.url;
   const planPath = join(fixture.info.dataDir, "room-plan.json");
-  const evidence = () => existsSync(`${planPath}.evidence.jsonl`)
-    ? readFileSync(`${planPath}.evidence.jsonl`, "utf8").trim().split("\n").filter(Boolean).map((line) => JSON.parse(line)) : [];
+  const evidence = () => readJsonLines(`${planPath}.evidence.jsonl`);
   const api = async (method: string, path: string, body?: unknown) => {
     const response = await fetch(url + path, {
       method, headers: { "content-type": "application/json", origin: url },

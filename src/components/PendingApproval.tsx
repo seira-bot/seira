@@ -5,7 +5,7 @@ import { cn } from "@/lib/cn";
 import { t, tFromServer } from "@/lib/i18n";
 import type { LocaleKey } from "@/locales";
 import { SkillRequestPreview } from "@/components/SkillRequestPreview";
-import { titledCard, titledCardAction, toolLabel } from "./ApprovalCard";
+import { privateReviewCard, SettingReview, titledCard, titledCardAction, toolLabel, waitingSetting } from "./ApprovalCard";
 import { ASK_QUIET_ANSWER, ASK_QUIET_BUTTON, ASK_SECONDARY_BUTTON, AskDetail, AskHeader, askPrimary, type Asker } from "./AskCard";
 import { approvalDetailText, outboundSummary } from "@/lib/approval-summary";
 import { reviewedSkillSha256 } from "../../shared/skill-request";
@@ -135,7 +135,7 @@ function approvalWords(pending: Pending, botName?: string): { line: string; summ
   const detail = (pending.commandAllowlist?.command ?? ask?.detail ?? (card ? approvalDetailText(card) : pending.detail)).trim();
   if (outbound) return { line: outbound.headline, ...(outbound.summary ? { summary: outbound.summary } : {}), detail };
   if (ask) return { line: ask.line, detail };
-  if (card?.mcpRequest || card?.lendingLift) return { line: card.title, inline: detail, detail };
+  if (card?.mcpRequest || card?.lendingLift || waitingSetting(card)) return { line: card!.title, inline: detail, detail };
   if (isDurable(pending)) return { line: label(pending), detail };
   const action = COMMAND_TOOLS.has(pending.tool) ? t("approval.tool.runCommand") : toolLabel(pending.tool);
   return { line: botName ? t("approval.card.namedWantsTo", { name: botName, action }) : label(pending), inline: detail, detail };
@@ -154,10 +154,12 @@ export const PendingApprovalPanel = memo(function PendingApprovalPanel({
   asker,
   actions,
   more,
+  threadId,
 }: {
   pending: Pending;
   count: number;
   index: number;
+  threadId?: string;
   botName?: string;
   /** The bot that asks, whose face leads the card. */
   asker?: Asker;
@@ -218,6 +220,7 @@ export const PendingApprovalPanel = memo(function PendingApprovalPanel({
       </div>
       {summary && <p dir="auto" className="mt-1.5 break-words text-[15px] font-medium leading-[22px] text-ink">{summary}</p>}
       {inline && <AskDetail text={inline} mono label={t("approval.aria.reviewDetails")} />}
+      {privateReviewCard(pending.message.card) && <SettingReview threadId={threadId} requestId={pending.requestId} />}
       {note && <p dir="auto" data-computer-ask-reason className="mt-1 break-words text-[13px] leading-[18px] text-ink-secondary">{note}</p>}
       {heldNote && (outbound ? (
         <p className="mt-2 flex items-center gap-1.5 text-[13px] leading-[18px] text-warning">
@@ -341,7 +344,7 @@ export function PendingApprovalActions({
       autoFocus={titled}
       className={ASK_SECONDARY_BUTTON}
     >
-      {pending.message.card?.lendingLift ? pending.message.card.options[1] : isRoutineRequest || isProfileRequest || titled ? t("approval.action.cancel") : t("approval.action.deny")}
+      {pending.message.card?.lendingLift || waitingSetting(pending.message.card) ? pending.message.card!.options[1] : isRoutineRequest || isProfileRequest || titled ? t("approval.action.cancel") : t("approval.action.deny")}
     </button>,
     <button
       key="allow"

@@ -29,6 +29,7 @@ import {
   type LogSignal, type ProcessSample, type QuietState,
 } from "./quiet-status.ts";
 import { acpMissingSession } from "./rpc-error.ts";
+import { permissionOptions } from "./permission-options.ts";
 import { readSessionReport } from "./session-reports.ts";
 import { acpTurnSteering, advertisedCommands, type AcpSteerSupport } from "./steer.ts";
 import { pickSessionModel, SessionModelControls, type AcpModelSelection } from "./session-model-controls.ts";
@@ -74,7 +75,7 @@ import { startupFailureRecoverable } from "./startup-recovery.ts";
 import { engineFailure, engineFailureKind } from "../engine-errors.ts";
 import { acpRuntimeFailure, acpStopFailure } from "./failure-words.ts";
 import { narrowsNativeTools, parseToolScope } from "../../../shared/tool-scope.ts";
-import { acpMcpServers, type AcpMcpServer } from "../turn-mcp.ts"; import { turnMcpCommands } from "./mcp-commands.ts"; import { acpOwnMcpOverHttp, loopbackUnproxied, noteAcpMcpHttp } from "../own-mcp-http.ts"; import { acpToolOutput, acpToolProgress } from "../tool-progress.ts";
+import { acpMcpServers, type AcpMcpServer } from "../turn-mcp.ts"; import { turnMcpCommands } from "./mcp-commands.ts"; import { acpOwnMcpOverHttp, loopbackUnproxied, noteAcpMcpHttp } from "../own-mcp-http.ts"; import { acpToolOutput, acpToolProgress } from "../tool-progress.ts"; import { acpTurnPlan } from "../turn-plan.ts";
 import { learnedToolCountLimit, mcpToolBudget, retryUnderToolLimit } from "../../tool-count-limit.ts"; import { instanceEnvNames } from "../../bot-box/env.ts";
 
 /** Failures fixed on the provider account, not by retrying; the reporting process stays pooled. */
@@ -154,6 +155,9 @@ export interface AcpSupport extends AcpDriverHooks {
   /** The approval mode is applied per turn by configureSession, which must throw unless the runtime
    * confirms it; an approval change never respawns the process. */
   sessionScopedApproval?: boolean;
+  /** An `allow_always` option of this agent ends with the native session. Without it, "allow for this session" sends
+   * `allow_once` and the driver keeps the grant in its own session memory. */
+  nativeSessionGrant?: boolean;
   /** False when this engine cannot run memory upkeep's one-shot text call cleanly; oneShotFolder holds a one-shot's folder. */
   backgroundText?: false; oneShotFolder?(): Promise<string>;
   /** Mutate the child env in place. `instanceEnvironment` tells a key put there on purpose from one
@@ -469,7 +473,7 @@ export function createAcpDriver(support: AcpSupport): ProviderDriver<AcpConfig> 
         session.idleTimer = armIdleClose(`${instanceId}\0${threadId}`, engineIdleMs(threadId, sessionIdle), { close: () => closeSession(threadId, "idle"), threadId, policy: sessionIdle, // per-chat
           idle: () => sessions.get(threadId) === session && !session.closing && !session.current });
       };
-    // Session allows the driver keeps when the agent offered no `allow_always`: exact operations per
+    // Session allows the driver keeps for an agent without a session-bound `allow_always` (`nativeSessionGrant`): exact operations per
     // thread, for the native session's life. A generic title with no input is never remembered.
       const sessionAllows = new Map<string, Set<string>>();
 
@@ -681,11 +685,7 @@ export function createAcpDriver(support: AcpSupport): ProviderDriver<AcpConfig> 
           const params = support.permissionRequest ? support.permissionRequest(msg.params ?? {}) : msg.params ?? {};
           current.flushAssistantText();
           const options: Array<{ optionId?: string; kind?: string; name?: string }> = Array.isArray(params.options) ? params.options : [];
-          const optionFor = (want: "allow" | "reject") =>
-            options.find((o) => o.kind === `${want}_once` && typeof o.optionId === "string")?.optionId
-              ?? options.find((o) => String(o.kind ?? "").startsWith(want) && typeof o.optionId === "string")?.optionId
-              ?? null;
-          const optionAlways = options.find((o) => o.kind === "allow_always" && typeof o.optionId === "string")?.optionId ?? null;
+          const { optionFor, optionAlways } = permissionOptions(options, support.nativeSessionGrant === true);
           const cancelled = { outcome: { outcome: "cancelled" } };
           const missing = (want: string) =>
             emit({
@@ -882,7 +882,7 @@ export function createAcpDriver(support: AcpSupport): ProviderDriver<AcpConfig> 
             case "session_info_update":
             case "plan": {
               const report = readSessionReport(u, p._meta, current.state, session);
-              if (report.context) emit({ ...base(threadId, current.turnId), type: "thread.token-usage.updated", input: 0, output: 0, ...report.context });
+              if (report.context) emit({ ...base(threadId, current.turnId), type: "thread.token-usage.updated", input: 0, output: 0, ...report.context }); const counts = u.sessionUpdate === "plan" ? acpTurnPlan(u) : null; if (counts) emit({ ...base(threadId, current.turnId), ...counts });
               if (!report.step) break;
               current.flushAssistantText();
               const itemId = `plan-${newId()}`;

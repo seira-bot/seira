@@ -12,6 +12,7 @@ import type { InstanceConfig, InstanceConfigMap } from "./contracts.ts";
 import { officialModels } from "./agent-endpoint-models.ts";
 import { CLAUDE_MODEL_ID } from "./drivers/claude-model-extras.ts";
 import { endpointBaseUrl } from "./openai-compat-endpoints.ts";
+import { PublicError } from "./public-error.ts";
 
 const displayName = z.string().trim().min(1).max(80).refine((value) => !/\p{Cc}/u.test(value), "Name cannot contain control characters");
 const model = z.string().trim().max(160).regex(CLAUDE_MODEL_ID, "Use the model id the endpoint serves.")
@@ -92,7 +93,7 @@ export function withClaudeEndpointInfo(described: unknown, configs: InstanceConf
 
 function endpointEnvironment(url: string, secret: string, fields: EndpointFields): Record<string, string> {
   const address = endpointBaseUrl(url);
-  if (!address) throw Object.assign(new Error("Enter an http(s) base URL."), { status: 400 });
+  if (!address) throw new PublicError("Enter an http(s) base URL.", 400);
   const environment: Record<string, string> = {
     ANTHROPIC_BASE_URL: address,
     ...(address === "https://api.anthropic.com" ? {} : { ANTHROPIC_AUTH_TOKEN: secret }),
@@ -148,14 +149,14 @@ export function newClaudeEndpoint(cfg: AppConfig, body: z.infer<typeof claudeEnd
 export function updateClaudeEndpoint(cfg: AppConfig, instanceId: string, body: EndpointFields) {
   const instances = persistableInstanceConfigs(cfg);
   const entry = instances[instanceId];
-  if (!entry) throw Object.assign(new Error("unknown instance"), { status: 404 });
-  if (!isClaudeEndpoint(entry)) throw Object.assign(new Error("This Claude instance is not a custom endpoint."), { status: 400 });
+  if (!entry) throw new PublicError("unknown instance", 404);
+  if (!isClaudeEndpoint(entry)) throw new PublicError("This Claude instance is not a custom endpoint.", 400);
   const saved = claudeEndpointInfo(entry);
-  if (!saved.baseUrl || !saved.models.length) throw Object.assign(new Error("This endpoint is missing its address or model. Remove it and add it again."), { status: 409 });
+  if (!saved.baseUrl || !saved.models.length) throw new PublicError("This endpoint is missing its address or model. Remove it and add it again.", 409);
   const address = body.baseUrl === undefined ? saved.baseUrl : endpointBaseUrl(body.baseUrl);
-  if (!address) throw Object.assign(new Error("Enter an http(s) base URL."), { status: 400 });
+  if (!address) throw new PublicError("Enter an http(s) base URL.", 400);
   // A saved token belongs to the address it was entered for.
-  if (body.token === undefined && address !== endpointBaseUrl(saved.baseUrl)) throw Object.assign(new Error("Enter the endpoint's token again for the new address."), { status: 400 });
+  if (body.token === undefined && address !== endpointBaseUrl(saved.baseUrl)) throw new PublicError("Enter the endpoint's token again for the new address.", 400);
   const fields: EndpointFields = { baseUrl: address, model: body.model ?? entry.environment?.ANTHROPIC_MODEL };
   if (body.displayName !== undefined) fields.displayName = body.displayName;
   for (const [field, key] of TIERS) {
@@ -163,7 +164,7 @@ export function updateClaudeEndpoint(cfg: AppConfig, instanceId: string, body: E
     if (value !== undefined) fields[field] = value;
   }
   const secret = body.token ?? entry.environment?.ANTHROPIC_AUTH_TOKEN ?? entry.environment?.ANTHROPIC_API_KEY;
-  if (!secret) throw Object.assign(new Error("Enter the endpoint's token."), { status: 400 });
+  if (!secret) throw new PublicError("Enter the endpoint's token.", 400);
   instances[instanceId] = {
     ...entry,
     ...(fields.displayName ? { displayName: fields.displayName } : {}),

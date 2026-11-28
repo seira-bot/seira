@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { DevsReportPayload } from "./devs-report.ts";
+import { bugReportIssueUrl, bugReportTitle } from "./devs-report-issue.ts";
 import { askReportStatus, bugReportEndpoint, bugReportsHomeSignature, bugReportStatusEndpoint, devsReportSender, devsStatusAsker, BUG_REPORT_SERVICE, sendDevsReport } from "./devs-report-send.ts";
 import { expectBothCloudSignedNames } from "./testing/cloud-signed-assert.ts";
 
@@ -28,7 +29,21 @@ describe("sending a @devs report", () => {
     expect(await sendDevsReport("https://cloud.example/api/bug-reports", PAYLOAD, fetcher)).toEqual({ ok: true, id: "6f1c2b3a-1d2e-4f5a-8b9c-0d1e2f3a4b5c" });
     expect(sent).toHaveLength(1);
     expect(sent[0]!.init).toMatchObject({ method: "POST", redirect: "error" });
-    expect(sent[0]!.body).toEqual(PAYLOAD);
+    expect(sent[0]!.body).toEqual({ ...PAYLOAD, title: "it broke" });
+  });
+
+  it("files the title the form shows, also for a report queued without one and on a retry", async () => {
+    const queued = { ...PAYLOAD, description: "the composer froze at C:\\Users\\ada\\x\n\nmore" };
+    const { sent, fetcher } = endpoint(new Error("offline"), answer(201, { id: "r1" }));
+    expect(await sendDevsReport("https://cloud.example/api/bug-reports", queued, fetcher)).toMatchObject({ ok: false, retry: true });
+    expect(await sendDevsReport("https://cloud.example/api/bug-reports", queued, fetcher)).toMatchObject({ ok: true });
+    const shown = bugReportTitle(queued);
+    expect(shown).toBe("the composer froze at");
+    expect(sent.map((one) => one.body.title)).toEqual([shown, shown]);
+    expect(new URL(bugReportIssueUrl(queued)).searchParams.get("title")).toBe(shown);
+    const generic = endpoint(answer(201, { id: "r2" }));
+    await sendDevsReport("https://cloud.example/api/bug-reports", { ...PAYLOAD, description: "https://example.com/only" }, generic.fetcher);
+    expect(generic.sent[0]!.body.title).toBe("Bug report from Seira");
   });
 
   it("reads the public issue's number, and whether the report joined an open issue, only when the relay says them well", async () => {
