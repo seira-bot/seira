@@ -24,10 +24,13 @@ Only the maintainers can release:
 - The `main` branch ruleset needs a pull request and a review from the code
   owners. Squash merge is the only merge method. The `main CI must pass`
   ruleset needs a passing `CI` check and has no bypass.
-- The `release tags` ruleset blocks the creation, update, and deletion of `v*`
-  tags for everyone except the organization admins.
-- GitHub Actions has no bypass on any of these rulesets, and its token can only read
-  the repository (see [CI](ci.md)).
+- The `release tag creation` ruleset blocks the creation of `v*` tags for
+  everyone except the organization admins and the `seira-release` GitHub App.
+  Only the `Release` workflow holds the key of that App.
+- The `release tags (update, deletion)` ruleset blocks the update and the
+  deletion of `v*` tags for everyone except the organization admins.
+- The job token of GitHub Actions has no bypass on any of these rulesets, and it
+  can only read the repository (see [CI](ci.md)).
 - A newer push to `main` can replace a `main` CI run that still waits for a
   runner (see [CI](ci.md#runs-on-main-and-in-the-merge-queue)). A cancelled
   run proves nothing about the released tree. Step 4 runs a preflight that needs a successful `CI` run for

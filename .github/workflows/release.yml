@@ -11,7 +11,7 @@
 # - Every job that holds a token with write access runs only on `main`. It runs only if the gate passed, or if the wait ended in this same attempt.
 # - The `blockers` job and the `publish` job stop the release while a P0 issue is open or a high or critical advisory has no patch (scripts/release-blockers.mjs).
 # - The App token comes from the `release` environment. Each job mints its own token, and a job that can name its permission does so.
-#   The `release tags` ruleset lets only the App and the organization admins create a tag.
+#   The `release tag creation` ruleset lets only the App and the organization admins create a tag.
 #   A release that the job token publishes starts no other workflow, so the `publish` job uses the App token.
 #   That token starts the npm, Snap, Microsoft Store and milestones workflows.
 # - A job that holds a token with write access runs only scripts from the workflow commit: release-assets.mjs, release-blockers.mjs, release-preflight.mjs.
