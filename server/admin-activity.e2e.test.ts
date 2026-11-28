@@ -190,7 +190,7 @@ posixOnly("admin activity log", () => {
     expect(JSON.stringify(mcpRow)).not.toContain(ARG_SECRET);
     expect(JSON.stringify(mcpRow)).toContain("--api-key");
     expect(JSON.stringify(mcpRow)).toContain("FIXTURE_TOKEN");
-    expect(rows.find((entry) => entry.action === "session.revoke")).toMatchObject({ target: { id: oldPhone, name: "Old phone" } });
+    expect(rows.find((entry) => entry.action === "session.revoke")).toMatchObject({ target: { id: oldPhone, name: oldPhone }, before: { label: "Old phone" } });
     expect(rows.find((entry) => entry.action === "pairing.create")).toMatchObject({ after: { label: "Reception iPad", scopes: ["client"] } });
     expect(rows.find((entry) => entry.action === "bot.delete")).toMatchObject({ target: { id: botId }, before: { visibility: { people: [ADA] } } });
   });
