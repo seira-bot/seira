@@ -225,7 +225,7 @@ describe("codexBackgroundProviderArgs", () => {
   });
 
   it("reads quoted keys, escapes and literal strings by their value, and writes each value again as a fresh string", () => {
-    const { env, args, overrides } = argsFor([
+    const { env, overrides } = argsFor([
       "[model_providers.mygw]",
       '"name" = "Gat\\u00e9 \\"one\\" X"',
       "base_url = 'https://gw.example/v1'",

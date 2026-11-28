@@ -17,8 +17,8 @@ const BUILT_IN = new Set(["openai", "oss", "ollama", "lmstudio"]);
 const BARE_KEY = /^[A-Za-z0-9_-]+$/;
 const ENV_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
 /** Control characters (C0, DEL, C1) and the Unicode line and paragraph separators. */
-const CONTROL = /[\u0000-\u001f\u007f-\u009f\u2028\u2029]/;
-const WHITESPACE_OR_CONTROL = /[\s\u0000-\u001f\u007f-\u009f]/;
+const CONTROL = /[\p{Cc}\p{Zl}\p{Zp}]/u;
+const WHITESPACE_OR_CONTROL = /[\s\p{Cc}]/u;
 const WIRE_APIS = new Set(["responses", "chat"]);
 /** The one query parameter a provider may carry: the API version. Its value is a short token. */
 const QUERY_PARAM = "api-version";
