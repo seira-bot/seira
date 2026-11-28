@@ -5,7 +5,7 @@ import { GITHUB_APP_MCP_SERVER } from "../../shared/github-app.ts";
 import type { SendTurnInput } from "../contracts.ts";
 import { appMountFor, customServerGate, gateServer, mcpStdioServer } from "../mcp-gate-config.ts";
 import { remoteMcpSpec } from "../mcp-http.ts";
-import { SPAWNED_PROXIES } from "../proxy-paths.ts";
+import { ownNode, SPAWNED_PROXIES } from "../proxy-paths.ts";
 
 const NODE_ENV_FLAG = { ELECTRON_RUN_AS_NODE: "1" };
 
@@ -28,7 +28,7 @@ export function buildMcpServers(turn: SendTurnInput): Record<string, unknown> | 
   if (turn.integrations?.phone) servers.phone = { ...turn.integrations.phone };
   if (turn.integrations?.dweb) {
     servers.dweb = {
-      command: process.execPath,
+      command: ownNode(),
       args: [SPAWNED_PROXIES.dweb],
       env: { ...NODE_ENV_FLAG, DWEB_URL: turn.integrations.dweb.url },
     };

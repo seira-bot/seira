@@ -68,13 +68,16 @@ recognized rather than replaced.
 | **Dalekta**, WhatsApp ads tracking: leads, closing, revenue and conversions | `https://mcp.dalekta.id/mcp` | Browser sign-in |
 | **Grupy.chat**, WhatsApp groups: AI summaries, members and join requests | `https://mcp.grupy.chat/mcp` | Browser sign-in |
 | **WAPilot**, WhatsApp Web through a Chrome extension: messages, chats, auto replies and broadcasts | `https://integrator.wapilot.id/v1/mcp` | Browser sign-in |
+| **Tebar**, social media: scheduled posts, comments, messages and stats on 10 platforms | `https://api.tebar.app/mcp` | Browser sign-in |
+| **TikTok**, your TikTok account: comments, mentions, video stats and trends | `https://business-api.tiktok.com/open_mcp/tt-ads-mcp-organic-social` | Browser sign-in |
+| **TikTok for Business**, TikTok ads: ad accounts, campaigns, catalogs and reports | `https://business-api.tiktok.com/open_mcp/tt-ads-mcp-layer` | Browser sign-in |
 
 A Konektor.id server added earlier with a pasted key keeps working and counts as
 connected. **Disconnect** deletes that server and its key. Connect again to use
 browser sign-in.
 
 A bot that can use one of these services acts on your account there: it can
-change your pages, maps, bookings, contacts, social posts, WhatsApp messages or WhatsApp groups. Choose which bots get
+change your pages, maps, bookings, contacts, social posts, comments, ad campaigns, WhatsApp messages or WhatsApp groups. Choose which bots get
 each card under **Bot access**.
 
 **WAPilot** is different: **Connect** first shows what a bot can do with it (read

@@ -22,6 +22,19 @@ export function testTmpPrefix(runId: string | undefined = process.env[TEST_RUN_I
   return runId ? `${TEST_TMP_PREFIX}${runId}-` : TEST_TMP_PREFIX;
 }
 
+/** macOS `sun_path` size with its terminating NUL (Linux allows 108): a longer socket path cannot be bound. */
+const SUN_PATH_BYTES = 104;
+
+/** The folder the test-file folders go in: the real temp folder, unless a socket the code under test makes in the
+ * throwaway home inside it would pass `sun_path`. macOS gives each user a long TMPDIR (/var/folders/…/T/), and there
+ * the permission broker's socket in ~/.seira fails to bind with EINVAL; /private/tmp is the same place /tmp is. */
+export function testTmpRoot(root: string = tmpdir(), platform: NodeJS.Platform = process.platform): string {
+  if (platform === "win32") return root; // named pipes, not files
+  const deepest = join(root, `${TEST_TMP_PREFIX}000000-XXXXXX`, `${TEST_HOME_PREFIX}XXXXXX`, ".seira", "perm-xxxxxxxx.sock");
+  if (Buffer.byteLength(deepest) < SUN_PATH_BYTES) return root;
+  return platform === "darwin" ? "/private/tmp" : "/tmp";
+}
+
 // os.tmpdir() reads TMPDIR on POSIX and TEMP/TMP on Windows, each time it is called.
 const TEMP_VARIABLES = ["TMPDIR", "TEMP", "TMP"] as const;
 
@@ -32,7 +45,7 @@ export interface TestTmp {
 }
 
 export function useTestTmp(): TestTmp {
-  const path = mkdtempSync(join(tmpdir(), testTmpPrefix()));
+  const path = mkdtempSync(join(testTmpRoot(), testTmpPrefix()));
   const before = TEMP_VARIABLES.map((name) => [name, process.env[name]] as const);
   for (const name of TEMP_VARIABLES) process.env[name] = path;
   return {

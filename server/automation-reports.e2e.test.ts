@@ -10,6 +10,7 @@ import { launchVerificationServer, runControlSeira, type VerificationServer } fr
 import { AUTOMATION_REPLY_PROMPT } from "./system-prompt.ts";
 import { launchRestartableServer } from "./testing/restartable-server.ts";
 import { openSse, type SseRecorder } from "./testing/sse.ts";
+import { readJsonLines } from "./testing/json-lines.ts";
 
 let fixture: VerificationServer | undefined;
 let events: SseRecorder | undefined;
@@ -69,7 +70,7 @@ async function server(env: NodeJS.ProcessEnv = {}) {
     .map(async (task: any) => (await messages(task.threadId)).filter((message) => threadIds.includes(message.threadRef?.threadId))))).flat();
   /** Whether the turn the script answered with `key` was told that only its last reply leaves the run. */
   const toldOnlyReplyLeaves = (key: string) => {
-    const turns = readFileSync(`${planPath}.evidence.jsonl`, "utf8").trim().split("\n").map((line) => JSON.parse(line) as { planKey?: string; system?: string; prompt?: unknown });
+    const turns = readJsonLines<{ planKey?: string; system?: string; prompt?: unknown }>(`${planPath}.evidence.jsonl`);
     const turn = turns.find((candidate) => candidate.planKey === key);
     expect(turn, `no turn answered with ${key}`).toBeTruthy();
     return `${turn!.system}\n${JSON.stringify(turn!.prompt)}`.includes(AUTOMATION_REPLY_PROMPT.trim());

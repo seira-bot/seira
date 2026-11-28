@@ -128,11 +128,27 @@ describe("start rules", () => {
 });
 
 describe("todoVisible (AC-14)", () => {
-  const viewer = { bot: (id: string) => id !== "hidden", thread: (id: string) => id !== "secret" };
+  const viewer = { bot: (id: string) => id !== "hidden", thread: (id: string) => id !== "secret", audience: (audience: string) => audience === "team" || audience === "member:me" };
   it("needs the bot and the source conversation to be seen", () => {
     expect(todoVisible({ botId: "atlas" }, viewer)).toBe(true);
     expect(todoVisible({}, viewer)).toBe(true);
     expect(todoVisible({ botId: "hidden" }, viewer)).toBe(false);
     expect(todoVisible({ botId: "atlas", source: { threadId: "secret" } }, viewer)).toBe(false);
+  });
+  it("also needs the conversation where the work runs to be seen", () => {
+    expect(todoVisible({ botId: "atlas", threadId: "open-chat" }, viewer)).toBe(true);
+    expect(todoVisible({ botId: "atlas", threadId: "secret" }, viewer)).toBe(false);
+    expect(todoVisible({ botId: "atlas", source: { threadId: "open-chat" }, threadId: "secret" }, viewer)).toBe(false);
+  });
+  it("also needs the audience of the todo to include the viewer, with or without a source (security)", () => {
+    expect(todoVisible({ botId: "atlas", audience: "team" }, viewer)).toBe(true);
+    expect(todoVisible({ botId: "atlas", audience: "member:me" }, viewer)).toBe(true);
+    expect(todoVisible({ botId: "atlas", audience: "member:other" }, viewer)).toBe(false);
+    expect(todoVisible({ audience: "room:r1" }, viewer)).toBe(false);
+    expect(todoVisible({ botId: "atlas", source: { threadId: "open-chat" }, audience: "member:other" }, viewer)).toBe(false);
+  });
+  it("keeps the audience out of what a client reads", () => {
+    const record = { id: "a", title: "T", status: "open" as const, start: { kind: "free" as const }, rank: 1, madeBy: { kind: "person" as const, name: "R" }, attempts: 0, depth: 0, createdAt: 1, updatedAt: 1, audience: "member:me" as const };
+    expect(publicTodo(record)).not.toHaveProperty("audience");
   });
 });

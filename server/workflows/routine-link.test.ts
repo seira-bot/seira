@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 
 import type { Workflow } from "../../shared/workflows.ts";
-import { linkWorkflow, workflowCopy, workflowLookupFor, workflowPromptCopy, workflowRefusal } from "./routine-link.ts";
+import { ROUTINE_CHECKS } from "../../shared/routines.ts";
+import { sanitizeInput } from "../routine-input.ts";
+import { linkWorkflow, workflowCopy, workflowLookupFor, workflowPromptCopy } from "./routine-link.ts";
 
 const names: Record<string, string> = { ana: "Ana", ben: "Ben" };
 const botName = (id: string) => names[id];
@@ -135,22 +137,42 @@ describe("linking a routine to a workflow", () => {
   });
 });
 
-describe("what a routine must not have to run a workflow", () => {
-  const clean = { target: "bot", runOn: "seira", scheduleType: "interval" };
-
-  it("accepts a plain routine", () => {
-    expect(workflowRefusal(clean)).toBeNull();
+describe("accepts every setting", () => {
+  const two = (): Workflow => ({
+    id: "w1", name: "Morning", createdAt: 1, updatedAt: 1,
+    steps: [{ id: "a", kind: "bot", botId: "ana", instruction: "Collect", position: at }, { id: "b", kind: "bot", botId: "ben", instruction: "Write", position: at }],
+    connections: [{ id: "1", from: "a", to: "b" }],
   });
+  const lookup = () => workflowCopy(two(), botName);
+  const base = { name: "Morning", workflowId: "w1", prompt: "unused", botId: "unused", schedule: { type: "interval" as const, everyMinutes: 60, anchorAt: 1 } };
+  const save = (change: Record<string, unknown>) => sanitizeInput({ ...base, ...change } as never, 0, lookup);
 
   it.each([
-    [{ access: "read-and-draft" }, "A workflow can't use read-only access."],
-    [{ checks: ["links"] }, "A workflow can't use checks."],
-    [{ runOn: "cloud" }, "A workflow runs on this computer."],
-    [{ deliver: "brief" }, "A workflow posts its results with a Post results step."],
-    [{ sameConversation: true }, "A workflow opens new chats for each run."],
-    [{ scheduleType: "limit_reset" }, "A workflow can't continue a chat after a usage limit."],
-  ])("refuses %j", (change, message) => {
-    expect(workflowRefusal({ ...clean, ...change })).toBe(message);
+    ["a cloud desktop", { runOn: "cloud" }, { runOn: "cloud" }],
+    ["delivery to the brief", { deliver: "brief" }, { deliver: "brief" }],
+    ["the same conversation", { sameConversation: true }, { sameConversation: true }],
+    ["a chosen model", { modelSelection: { instanceId: "codex", model: "gpt-x" } }, { modelSelection: { instanceId: "codex", model: "gpt-x" } }],
+    ["a start at the limit reset", { schedule: { type: "limit_reset", engine: "claude", repeat: "once" } }, { schedule: { type: "limit_reset" } }],
+    ["read-and-draft access", { access: "read-and-draft" }, { access: "read-and-draft" }],
+    ["checks", { checks: [ROUTINE_CHECKS[0]] }, { checks: [ROUTINE_CHECKS[0]] }],
+  ])("saves %s on a workflow with two steps", (_name, change, kept) => {
+    expect(save(change)).toMatchObject({ workflowId: "w1", workflowBotIds: ["ana", "ben"], botId: "ana", ...kept });
+  });
+});
+
+describe("a room goal", () => {
+  const lookup = () => workflowCopy({ id: "w1", name: "M", createdAt: 1, updatedAt: 1, steps: [{ id: "a", kind: "bot", botId: "ana", instruction: "Go", position: at }], connections: [] }, botName);
+  const goal = (change: Record<string, unknown> = {}) =>
+    sanitizeInput({ name: "M", workflowId: "w1", prompt: "x", botId: "ana", target: "room-goal", groupId: "room-1", schedule: { type: "interval", everyMinutes: 60, anchorAt: 1 }, ...change } as never, 0, lookup);
+  const refusal = (change: Record<string, unknown>) => { try { goal(change); } catch (error) { return { message: (error as Error).message, status: (error as { status?: number }).status }; } return null; };
+
+  it("keeps the workflow and the room of a goal that runs steps", () => {
+    expect(goal()).toMatchObject({ target: "room-goal", groupId: "room-1", workflowId: "w1", workflowBotIds: ["ana"] });
+  });
+
+  it("refuses steps without a room, and reads and drafts only, with plain words and a 400", () => {
+    expect(refusal({ groupId: "" })).toEqual({ message: "Choose a room for this goal.", status: 400 });
+    expect(refusal({ access: "read-and-draft" })).toEqual({ message: "A room goal can't be set to reads and drafts only. Turn that off for the automation and each step.", status: 400 });
   });
 });
 

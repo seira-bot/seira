@@ -322,6 +322,12 @@ gh run list --repo seira-bot/seira --workflow msstore-publish.yml --limit 1
   also stops when Partner Center already has a submission in progress,
   because the upload tool deletes that submission. Finish or delete that
   submission in Partner Center, then run the workflow again.
+- The `publish` job installs the `msstore` tool from the `microsoft/msstore-cli`
+  release `v0.4.4`. It checks the SHA-256 of the archive against a digest in the
+  workflow, and stops on a mismatch. This check runs before every step that
+  reads a `MSSTORE_*` credential, including the check of the credentials and of
+  Partner Center. A new tool version needs a new URL and a new digest from the
+  release.
 - The `publish` job uploads the package with the `msstore` tool, sets the
   What's new text of each listing, commits the submission, and waits until the
   commit ends. Microsoft then certifies the submission. This can take hours.
@@ -342,6 +348,10 @@ Before it uploads the package, the workflow extracts it and checks that:
 - the manifest names the display name and the publisher display name of Seira;
 - the manifest declares the `seira` protocol, the `runFullTrust`
   capability, and a start-up task that is off by default;
+- the manifest declares the app execution alias `seira-desktop.exe` for
+  the app. An agent engine is outside the package, and Windows lets it start
+  the app's executable only through this alias. Without it, Seira's built-in
+  tools fail with `EPERM`;
 - the package version is the mapped version (see below);
 - each logo in `build/appx/` is in the package with the same SHA-256, and no
   sample logo of electron-builder is in the package.

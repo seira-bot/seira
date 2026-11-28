@@ -2,9 +2,11 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import type { Audience } from "../audience.ts";
 import { TODO_BOT_DAILY_MAX, TODO_MAX_DEPTH } from "../../shared/todo.ts";
 import { workOrigin } from "../peer-provenance.ts";
-import { TodoStore } from "../todos.ts";
+import type { BotAccessLevel } from "../../shared/bot-access.ts";
+import { publicTodo, TodoStore, type TodoPerson } from "../todos.ts";
 import { createTodoLauncher, createTodosHost, TodoError, type TodoBot, type TodoRoutines } from "./todos-host.ts";
 
 const dirs: string[] = [];
@@ -13,7 +15,7 @@ afterEach(() => { for (const dir of dirs.splice(0)) rmSync(dir, { recursive: tru
 const BOTS: TodoBot[] = [{ id: "atlas", name: "Atlas" }, { id: "scout", name: "Scout" }, { id: "chief", name: "Chief", chiefOfStaff: true }];
 const person = { kind: "person" as const, name: "Rama" };
 
-function setup(over: { routines?: TodoRoutines | null } = {}) {
+function setup(over: { routines?: TodoRoutines | null; audiences?: Record<string, Audience>; levelFor?: (person: TodoPerson | undefined, botId: string) => BotAccessLevel } = {}) {
   const dir = mkdtempSync(join(tmpdir(), "todos-host-"));
   dirs.push(dir);
   const clock = { now: 1_800_000_000_000 };
@@ -27,7 +29,7 @@ function setup(over: { routines?: TodoRoutines | null } = {}) {
     remove: (id) => { removed.push(id); return true; },
     update: (id, patch) => { updated.push([id, patch]); return null; },
   };
-  const host = createTodosHost({ store, bots: () => BOTS, routines: () => (over.routines === undefined ? routines : over.routines), teamCloud: false });
+  const host = createTodosHost({ store, bots: () => BOTS, routines: () => (over.routines === undefined ? routines : over.routines), teamCloud: false, levelFor: over.levelFor ?? (() => "chat"), audienceOf: (threadId) => over.audiences?.[threadId] ?? "team" });
   return { host, store, clock, made, removed, updated };
 }
 
@@ -228,25 +230,30 @@ describe("tools for a bot (AC-16)", () => {
 });
 
 describe("launch provenance", () => {
-  function launcher() {
+  function launcher(over: { audience?: Audience; adoptable?: boolean } = {}) {
+    const adopted: Array<[string, string]> = [];
     const calls: Array<{ botId: string; text: string; opts: any }> = [];
     const lines: Array<Record<string, unknown>> = [];
     const queued: unknown[] = [];
     let admits = true;
+    const opened: Array<[string, string]> = [];
     const launch = createTodoLauncher({
       store: {
-        createTask: () => ({ threadId: "th1" }),
         appendMessage: (_thread, message) => { lines.push(message); return { id: "line1", ...message }; },
       },
+      openTask: (todo, title) => { opened.push([todo.id, title]); return { threadId: "th1" }; },
       startTurn: async (botId, text, opts) => { calls.push({ botId, text, opts }); },
       admits: () => admits,
       queue: (...args) => { queued.push(args); },
       botName: (id) => (id === "scout" ? "Scout" : undefined),
+      audienceOf: () => over.audience ?? "team",
+      adoptable: (audience) => audience === "team" || over.adoptable !== false,
+      adopt: (threadId, audience) => { adopted.push([threadId, audience]); },
     });
-    return { launch, calls, lines, queued, deny: () => { admits = false; } };
+    return { launch, calls, lines, queued, opened, adopted, deny: () => { admits = false; } };
   }
   const input = (over: { force?: boolean } = {}) => ({ line: "Do it", prompt: "Do it\n\nReply.", force: false, onThread: () => {}, onFailed: () => {}, ...over });
-  const record = (madeBy: any) => ({ id: "td", title: "Do it", status: "working" as const, botId: "atlas", start: { kind: "free" as const }, rank: 1, madeBy, attempts: 1, depth: 0, createdAt: 1, updatedAt: 1 });
+  const record = (madeBy: any, person?: TodoPerson) => ({ id: "td", title: "Do it", status: "working" as const, botId: "atlas", start: { kind: "free" as const }, rank: 1, madeBy, ...(person ? { person } : {}), attempts: 1, depth: 0, createdAt: 1, updatedAt: 1 });
 
   it("never labels a todo a bot made as the person's request", async () => {
     const { launch, calls, lines } = launcher();
@@ -264,6 +271,39 @@ describe("launch provenance", () => {
     expect(calls[0]!.opts.peerAsk).toBeUndefined();
   });
 
+  it("makes the work conversation private to the audience of its todo before the first line (security)", async () => {
+    const { launch, adopted, lines } = launcher({ audience: "member:rama" });
+    await launch(record({ kind: "person", name: "Rama" }), input());
+    expect(adopted).toEqual([["th1", "member:rama"]]);
+    expect(lines).toHaveLength(1);
+  });
+
+  it("does not start work for an audience its conversation cannot be kept private to (security)", async () => {
+    const { launch, opened, lines, calls } = launcher({ audience: "room:g", adoptable: false });
+    await expect(launch(record({ kind: "person", name: "Rama" }), input())).rejects.toThrow("cannot be kept private");
+    expect(opened).toEqual([]);
+    expect(lines).toHaveLength(0);
+    expect(calls).toHaveLength(0);
+  });
+
+  it("opens a person's todo as that person and names them, without acting for them (security)", async () => {
+    const { launch, calls, lines, opened } = launcher();
+    const pat: TodoPerson = { key: "p_pat", viewer: { kind: "member", email: "pat@example.com" } };
+    await launch(record({ kind: "person", name: "Pat" }, pat), input());
+    expect(opened).toEqual([["td", "Do it"]]);
+    expect(lines[0]!.sender).toEqual({ name: "Pat" });
+    expect(calls[0]!.opts.sender).toEqual({ name: "Pat" });
+    expect(calls[0]!.opts.trigger).toEqual({ kind: "routine", label: "Todo", email: "pat@example.com" });
+    expect(calls[0]!.opts.origin).toEqual({ kind: "outside" });
+  });
+
+  it("names nobody on a todo a bot made", async () => {
+    const { launch, calls, lines } = launcher();
+    await launch(record({ kind: "bot", botId: "scout" }, { key: "p_pat" }), input());
+    expect(lines[0]!.sender).toBeUndefined();
+    expect(calls[0]!.opts.sender).toBeUndefined();
+  });
+
   it("queues behind the bot's work for Start now and refuses an automatic start without room", async () => {
     const { launch, queued, calls, lines, deny } = launcher();
     deny();
@@ -271,8 +311,35 @@ describe("launch provenance", () => {
     expect(lines).toHaveLength(0);
     await launch(record({ kind: "person", name: "R" }), input({ force: true }));
     expect(lines).toEqual([expect.objectContaining({ role: "user", text: "Do it", fromTodo: "td" })]);
-    expect(queued).toEqual([["atlas", "th1", "Do it", expect.objectContaining({ prompt: "Do it\n\nReply.", rowId: "line1", unattended: true })]]);
+    expect(queued).toEqual([["atlas", "th1", "Do it", expect.objectContaining({ prompt: "Do it\n\nReply.", rowId: "line1", unattended: true, sender: { name: "R" } })]]);
     expect(calls).toHaveLength(0);
+  });
+});
+
+describe("security: audience of a todo", () => {
+  it("does not match a same-title todo of another audience, so the answer shows nothing of it", () => {
+    const { host } = setup({ audiences: { mine: "member:rama", theirs: "member:sinta" } });
+    const bot = { kind: "bot" as const, botId: "atlas" };
+    const first = host.add([{ title: "Check the logs", botId: "scout", source: { threadId: "theirs" } }], bot).todos[0]!;
+    const other = host.add([{ title: "check the logs", botId: "scout", source: { threadId: "mine" } }], bot);
+    expect(other.existing).toEqual([]);
+    expect(other.todos).toHaveLength(1);
+    expect(other.todos[0]!.id).not.toBe(first.id);
+    const same = host.add([{ title: "Check the LOGS", botId: "scout", source: { threadId: "mine" } }], bot);
+    expect(same.todos).toEqual([]);
+    expect(same.existing.map((todo) => todo.id)).toEqual([other.todos[0]!.id]);
+    expect(host.add([{ title: "check the logs", botId: "scout" }], bot).existing).toEqual([]);
+  });
+
+  it("refuses a repeating todo from a private chat or a room, and keeps the todo out of the list", () => {
+    const { host, store, made } = setup({ audiences: { mine: "member:rama", room: "room:g" } });
+    for (const threadId of ["mine", "room"]) {
+      expect(() => host.add([{ title: "Digest", botId: "atlas", repeat: { time: "09:00", weekdays: [] }, source: { threadId } }], person)).toThrow("shared place");
+    }
+    expect(made).toEqual([]);
+    expect(store.live()).toEqual([]);
+    expect(host.add([{ title: "Digest", botId: "atlas", repeat: { time: "09:00", weekdays: [] } }], person).todos).toHaveLength(1);
+    expect(made).toHaveLength(1);
   });
 });
 
@@ -321,5 +388,89 @@ describe("security: repeating todos and reach", () => {
     expect(() => host.botAssign({ botId: "chief", threadId: "t" }, { todoId: todo.id, assigneeBotId: "scout", reason: "r" }, none)).toThrow("No todo has that id.");
     expect(() => host.botUpdate({ botId: "chief", threadId: "t" }, { todoId: todo.id, status: "done" }, none)).toThrow("No todo has that id.");
     expect(host.botAssign({ botId: "chief", threadId: "t" }, { todoId: todo.id, assigneeBotId: "scout", reason: "r" }, () => true).botId).toBe("scout");
+  });
+});
+
+describe("security: a person's todo reaches only bots that person may chat with", () => {
+  const pat: TodoPerson = { key: "p_pat", viewer: { kind: "member", email: "pat@example.com" } };
+  const patLevels = (levels: Record<string, BotAccessLevel>) => (one: TodoPerson | undefined, botId: string): BotAccessLevel =>
+    one?.viewer?.email === "pat@example.com" ? levels[botId] ?? "none" : "edit";
+
+  it("records whom the todo works for, and keeps it off the client copy", () => {
+    const { host, store } = setup();
+    const todo = host.add([{ title: "Plan" }], person, { person: pat }).todos[0]!;
+    expect(store.get(todo.id)!.person).toEqual(pat);
+    expect(publicTodo(store.get(todo.id)!)).not.toHaveProperty("person");
+  });
+
+  it("does not let the picker give the todo to a bot its writer cannot chat with", () => {
+    const { host, store } = setup({ levelFor: patLevels({ atlas: "chat", scout: "view", chief: "chat" }) });
+    const todo = host.add([{ title: "Read the payroll" }], person, { person: pat }).todos[0]!;
+    expect(() => host.botAssign({ botId: "chief", threadId: "t" }, { todoId: todo.id, assigneeBotId: "scout", reason: "fits" })).toThrow("cannot give work to Scout");
+    expect(store.get(todo.id)).toMatchObject({ status: "open" });
+    expect(store.get(todo.id)!.botId).toBeUndefined();
+    expect(host.botAssign({ botId: "chief", threadId: "t" }, { todoId: todo.id, assigneeBotId: "atlas", reason: "fits" }).botId).toBe("atlas");
+  });
+
+  it("does not let the bot that has the todo hand it on to such a bot either", () => {
+    const { host } = setup({ levelFor: patLevels({ atlas: "chat", scout: "none" }) });
+    const todo = host.add([{ title: "Ship it", botId: "atlas" }], person, { person: pat }).todos[0]!;
+    expect(() => host.botAssign({ botId: "atlas", threadId: "t" }, { todoId: todo.id, assigneeBotId: "scout", reason: "busy" })).toThrow(TodoError);
+  });
+
+  it("does not let someone else on the Board give it to such a bot", () => {
+    const { host, store } = setup({ levelFor: patLevels({ atlas: "chat", scout: "view" }) });
+    const todo = host.add([{ title: "Ship it", botId: "atlas" }], person, { person: pat }).todos[0]!;
+    expect(() => host.patch(todo.id, { botId: "scout" }, { kind: "person", name: "Admin" })).toThrow("cannot give work to this bot");
+    expect(store.get(todo.id)!.botId).toBe("atlas");
+    expect(() => host.add([{ title: "Direct", botId: "scout" }], person, { person: pat })).toThrow("You cannot give work to this bot.");
+  });
+
+  it("treats a todo with nobody recorded as nobody's", () => {
+    const seen: Array<TodoPerson | undefined> = [];
+    const { host, store } = setup({ levelFor: (one) => { seen.push(one); return one ? "chat" : "none"; } });
+    store.insert({ id: "old", title: "Old", status: "open", start: { kind: "free" }, rank: 1, madeBy: person, attempts: 0, depth: 0, createdAt: 1, updatedAt: 1 });
+    expect(() => host.botAssign({ botId: "chief", threadId: "t" }, { todoId: "old", assigneeBotId: "atlas", reason: "r" })).toThrow(TodoError);
+    expect(seen).toEqual([undefined]);
+  });
+
+  it("leaves a todo a bot made to the bot's own reach", () => {
+    const { host } = setup({ levelFor: () => "none" });
+    const todo = host.botAdd({ botId: "atlas", threadId: "t" }, [{ title: "Follow up" }], { key: "p_pat" }).todos[0]!;
+    expect(todo.person).toEqual({ key: "p_pat" });
+    expect(host.botAssign({ botId: "atlas", threadId: "t" }, { todoId: todo.id, assigneeBotId: "scout", reason: "r" }).botId).toBe("scout");
+  });
+});
+
+describe("security: a todo of a personal Seira keeps its person's reach at every step", () => {
+  const owner: TodoPerson = { key: "p_mira", viewer: { kind: "member", email: "mira@acme.test" } };
+  const levels = (botId: string): BotAccessLevel => (botId === "scout" ? "view" : "chat");
+  const world = () => setup({ levelFor: (who, botId) => (who?.viewer?.email ? levels(botId) : "chat") });
+
+  it("refuses the bot it is first given to when its person may not chat with it", () => {
+    const { host, store } = world();
+    expect(() => host.botAdd({ botId: "atlas", threadId: "t" }, [{ title: "Read payroll", assigneeBotId: "scout" }], owner)).toThrow(TodoError);
+    expect(store.live()).toHaveLength(0);
+  });
+
+  it("refuses a later hand-over by a team bot to a bot its person may not chat with, and keeps the todo where it is", () => {
+    const { host, store } = world();
+    const todo = host.botAdd({ botId: "atlas", threadId: "t" }, [{ title: "Follow up", assigneeBotId: "chief" }], owner).todos[0]!;
+    expect(() => host.botAssign({ botId: "chief", threadId: "t" }, { todoId: todo.id, assigneeBotId: "scout", reason: "fits" })).toThrow("cannot give work to Scout");
+    expect(store.get(todo.id)!.botId).toBe("chief");
+  });
+
+  it("refuses the same final bot from the Board, the picker and a start", () => {
+    const { host, store } = world();
+    const todo = host.botAdd({ botId: "atlas", threadId: "t" }, [{ title: "Follow up", assigneeBotId: "chief" }], owner).todos[0]!;
+    expect(() => host.patch(todo.id, { botId: "scout" }, person)).toThrow(TodoError);
+    expect(host.personMayGive(store.get(todo.id)!, "scout")).toBe(false);
+    expect(host.personMayGive(store.get(todo.id)!, "atlas")).toBe(true);
+  });
+
+  it("leaves a bot-made todo with no recorded owner to the bots' own reach rules", () => {
+    const { host } = world();
+    const todo = host.botAdd({ botId: "atlas", threadId: "t" }, [{ title: "Follow up", assigneeBotId: "chief" }], { key: "p_pat" }).todos[0]!;
+    expect(host.botAssign({ botId: "chief", threadId: "t" }, { todoId: todo.id, assigneeBotId: "scout", reason: "fits" }).botId).toBe("scout");
   });
 });

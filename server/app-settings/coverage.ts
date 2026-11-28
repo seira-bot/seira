@@ -8,7 +8,7 @@ export const FIELD_ENTRIES: Record<string, FieldCoverage> = {
   signIn: { entries: ["people.signIn"] },
   defaultModelSelection: { entries: ["bots.defaultModel"] },
   automaticRecovery: { entries: ["ai.backupModel"] },
-  aiPool: { excluded: "The AI pool moves usage between paid accounts, so only the owner sets it." },
+  aiPool: { entries: ["ai.pool"] },
   cacheKeepWarm: { entries: ["bots.keepWarm"] },
   newBotDefaults: { entries: ["bots.newBotTemplate"] },
   newBots: { entries: ["bots.newBotEffort"] },

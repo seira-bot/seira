@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
-import { check, feedFiles, isFeed, judgeAssets, missingForPublish, parseArgs, publish, repoFromRemote, sumsFiles, upload, uploadOrder } from "./release-assets.mjs";
+import { check, feedFiles, isFeed, judgeAssets, missingForPublish, parseArgs, publish, repoFromRemote, resolveRepo, sumsFiles, upload, uploadOrder } from "./release-assets.mjs";
 
 const FEED = "version: 1.0.0\nfiles:\n  - url: Seira-1.0.0-setup.exe\n    sha512: abc\n    size: 100\n  - url: Seira-1.0.0-setup.exe.blockmap\n    sha512: def\n    size: 5\npath: Seira-1.0.0-setup.exe\nsha512: abc\n";
 const SUMS = `${"a".repeat(64)}  Seira-1.0.0-setup.exe\n${"b".repeat(64)} *Seira-setup.exe\n`;
@@ -62,6 +62,15 @@ describe("parseArgs", () => {
   it("reads the repository from a remote", () => {
     expect(repoFromRemote("git@github.com:o/r.git")).toBe("o/r");
     expect(repoFromRemote("https://example.test/o/r")).toBeNull();
+  });
+
+  it("does not read the origin remote when --repo is given", () => {
+    const readOrigin = vi.fn(() => {
+      throw new Error("not a git repository");
+    });
+    expect(resolveRepo("o/r", readOrigin)).toBe("o/r");
+    expect(readOrigin).not.toHaveBeenCalled();
+    expect(resolveRepo(undefined, () => "git@github.com:a/b.git")).toBe("a/b");
   });
 });
 

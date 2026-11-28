@@ -30,7 +30,13 @@ Give each bot a job. Watch it work. Approve the steps that matter.</p>
   <a href="https://docs.seira.bot"><b>Docs</b></a> ·
   <a href="https://seira.bot"><b>Website</b></a> ·
   <a href="https://discord.gg/wAAgETJpFS"><b>Discord</b></a> ·
+  <a href="https://apps.microsoft.com/detail/9MVFVK4VTFDH"><b>Windows app</b></a> ·
   <a href="https://play.google.com/store/apps/details?id=bot.seira.companion"><b>Android app</b></a>
+</p>
+
+<p>
+  <a href="https://apps.microsoft.com/detail/9mvfvk4vtfdh?referrer=appbadge&amp;mode=direct"><img src="apps/docs/public/badges/microsoft-store.svg" alt="Download from the Microsoft Store" height="48"></a>
+  <a href="https://play.google.com/store/apps/details?id=bot.seira.companion"><img src="apps/docs/public/badges/google-play.png" alt="Get it on Google Play" height="48"></a>
 </p>
 
 <p>
@@ -95,7 +101,7 @@ Give each bot a job. Watch it work. Approve the steps that matter.</p>
 
 ## Install
 
-<a href="https://apps.microsoft.com/detail/9MVFVK4VTFDH"><img src="https://get.microsoft.com/images/en-us%20dark.svg" alt="Get it from Microsoft" height="56"></a>
+<a href="https://apps.microsoft.com/detail/9mvfvk4vtfdh?referrer=appbadge&amp;mode=direct"><img src="apps/docs/public/badges/microsoft-store.svg" alt="Download from the Microsoft Store" height="56"></a>
 
 | System | Download | How to install |
 |---|---|---|

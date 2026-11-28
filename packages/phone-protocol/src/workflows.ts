@@ -1,4 +1,5 @@
-import { ROUTINE_GOAL_RUN_LIMIT_MINUTES } from "./routines.ts";
+import { ROUTINE_GOAL_RUN_LIMIT_MINUTES, type RoutineAccess } from "./routines.ts";
+import type { ModelSelection } from "./wire.ts";
 
 export const WORKFLOW_LIMITS = {
   steps: 50, connections: 100, name: 80, instruction: 20_000, question: 2_000, note: 2_000, waitMinutes: 43_200,
@@ -12,7 +13,8 @@ export const WORKFLOW_FRAME_OUTPUT_CHARS = 300;
 export interface WorkflowPosition { x: number; y: number }
 export interface WorkflowStepBase { id: string; position: WorkflowPosition }
 export type WorkflowStep =
-  | (WorkflowStepBase & { kind: "bot"; botId: string; instruction: string })
+  /** `modelSelection` and `access` override the routine's own for this step only. */
+  | (WorkflowStepBase & { kind: "bot"; botId: string; instruction: string; modelSelection?: ModelSelection; access?: RoutineAccess })
   | (WorkflowStepBase & { kind: "check"; question: string })
   | (WorkflowStepBase & { kind: "wait"; minutes: number })
   | (WorkflowStepBase & { kind: "post" })
@@ -22,9 +24,10 @@ export type WorkflowBranch = "yes" | "no";
 /** `branch` only on a connection out of an AI check. */
 export interface WorkflowConnection { id: string; from: string; to: string; branch?: WorkflowBranch }
 export interface WorkflowGraph { steps: WorkflowStep[]; connections: WorkflowConnection[] }
-export interface Workflow extends WorkflowGraph { id: string; name: string; createdAt: number; updatedAt: number }
+/** `manual`: it runs only when a person starts it, so it has no start on purpose. */
+export interface Workflow extends WorkflowGraph { id: string; name: string; manual?: boolean; createdAt: number; updatedAt: number }
 /** `ifUpdatedAt`: refuse the change when the saved workflow is newer (another window changed it). */
-export interface WorkflowInput extends WorkflowGraph { name: string; ifUpdatedAt?: number }
+export interface WorkflowInput extends WorkflowGraph { name: string; manual?: boolean; ifUpdatedAt?: number }
 /** A workflow drawn from a finished reply, not saved yet. `omitted`: steps left out because the person may not use
  * their bot. `trimmed`: steps past the step limit. */
 export interface DrawnWorkflow { draft: WorkflowInput; omitted: number; trimmed: number }
@@ -62,6 +65,9 @@ export interface WorkflowStepRun {
   startedAt?: number;
   finishedAt?: number;
 }
+export type WorkflowRunStartKind = "schedule" | "manual" | "webhook" | "app";
+/** The start that fired a run: `id` is the routine, webhook or app trigger. */
+export interface WorkflowRunStart { kind: WorkflowRunStartKind; id: string }
 export type WorkflowRunStatus = "active" | "completed" | "failed" | "stopped";
 export interface WorkflowRun {
   /** The id of the routine run it belongs to. */
@@ -76,6 +82,10 @@ export interface WorkflowRun {
   startStepId: string;
   currentStepId?: string;
   fromRunId?: string;
+  /** The start that fired the run. Absent on a run made before starts were kept. */
+  start?: WorkflowRunStart;
+  /** The text of the event that fired the run. The first step receives it as its input. */
+  event?: string;
   /** What the start step receives on "Run again from here". */
   input?: { fromStepId: string; output: string };
   /** One chat per bot per run: bot id to thread id. */

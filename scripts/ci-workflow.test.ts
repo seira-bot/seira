@@ -407,15 +407,29 @@ describe("msstore publish workflow", () => {
     for (const name of text.match(/secrets\.[A-Z_]+/g)!) expect(SECRETS).toContain(name.slice("secrets.".length));
   });
 
-  it("checks the credentials and Partner Center before the upload, and installs the pinned msstore tool between", () => {
-    const names = stepsOf(publish!).map((step) => step.name ?? step.uses);
+  it("checks the digest of the msstore tool before every step that reads a Store credential, then the credentials and Partner Center before the upload", () => {
+    const steps = stepsOf(publish!);
+    const names = steps.map((step) => step.name ?? step.uses);
     const at = (name: string) => names.findIndex((each) => each?.startsWith(name));
-    expect(at("Check the package")).toBeLessThan(at("Check the credentials and Partner Center"));
-    expect(at("Check the credentials and Partner Center")).toBeLessThan(at("microsoft/microsoft-store-apppublisher@"));
-    expect(at("microsoft/microsoft-store-apppublisher@")).toBeLessThan(at("Upload the package"));
+    expect(at("Check the package")).toBeLessThan(at("Install the msstore tool"));
+    expect(at("Install the msstore tool")).toBeLessThan(at("Check the credentials and Partner Center"));
+    expect(at("Check the credentials and Partner Center")).toBeLessThan(at("Upload the package"));
     expect(at("Upload the package")).toBeLessThan(at("Set What's new"));
-    const install = stepsOf(publish!).find((step) => step.uses?.startsWith("microsoft/microsoft-store-apppublisher@"))!;
-    expect(install.with).toEqual({ version: "v0.4.4" });
+    // Every step that reads a MSSTORE_* secret comes after the digest gate.
+    const gate = at("Install the msstore tool");
+    const readers = steps.flatMap((step, index) => (JSON.stringify(step).includes("secrets.MSSTORE_") ? [index] : []));
+    expect(readers.length).toBeGreaterThanOrEqual(3);
+    for (const index of readers) expect(index).toBeGreaterThan(gate);
+    expect(text).not.toContain("microsoft-store-apppublisher");
+    const install = find(publish!, "Install the msstore tool");
+    expect(install.env).toEqual({
+      MSSTORE_CLI_URL: "https://github.com/microsoft/msstore-cli/releases/download/v0.4.4/MSStoreCLI-win-x64.zip",
+      MSSTORE_CLI_SHA256: "d288a324541dc68244a683eb5b6445e9239bb47d1e6acf5cca4d1476017f1447",
+    });
+    // The digest check fails the job, and runs before the archive is opened or put in PATH. The step reads no secret.
+    expect(install.run).toContain('sha256sum "$zip"');
+    expect(install.run).toMatch(/\[ "\$actual" != "\$MSSTORE_CLI_SHA256" \][\s\S]*exit 1[\s\S]*7z x/);
+    expect(JSON.stringify(install)).not.toContain("secrets.");
     const upload = find(publish!, "Upload the package");
     expect(upload.run).toContain("msstore reconfigure");
     expect(upload.run).toContain('msstore publish "msstore/$FILE" -id "$PRODUCT_ID" --noCommit');
@@ -610,7 +624,7 @@ describe("CI workflows", () => {
       expect(flow.permissions, file).toEqual({ contents: "read" });
       for (const [id, job] of Object.entries(flow.jobs)) {
         if (file === CLAIMS && id === "claims") {
-          expect(job.permissions, `${file} job ${id}`).toEqual({ contents: "read", issues: "write" });
+          expect(job.permissions, `${file} job ${id}`).toEqual({ contents: "read", issues: "write", "pull-requests": "read" });
           expect(job.environment, `${file} job ${id}`).toBeUndefined();
           continue;
         }

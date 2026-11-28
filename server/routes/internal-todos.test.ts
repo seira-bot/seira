@@ -18,7 +18,7 @@ function setup(readable: (todo: { source?: { threadId: string } }) => boolean = 
   dirs.push(dir);
   let n = 0;
   const store = new TodoStore({ dataDir: dir, newId: () => `t${++n}` });
-  const host = createTodosHost({ store, bots: () => BOTS, routines: () => null, teamCloud: false });
+  const host = createTodosHost({ store, bots: () => BOTS, routines: () => null, teamCloud: false, levelFor: () => "chat" });
   const lines: Array<[string, string, string[]]> = [];
   const route = createInternalTodoRoutes({ host, from: { id: "chief" }, fromThreadId: "th", readBody: async () => null, readable: readable as never, botName: (id) => BOTS.find((bot) => bot.id === id)?.name, postLine: (thread, text, ids) => { lines.push([thread, text, ids]); } });
   const call = async (method: string, path: string, body: unknown = {}) => {
@@ -38,11 +38,14 @@ describe("internal todo routes", () => {
 
   it("adds todos for the calling bot and posts one line in its conversation (AC-16)", async () => {
     const dir = setup();
-    const route = createInternalTodoRoutes({ host: dir.host, from: { id: "chief" }, fromThreadId: "th", readBody: async () => ({ todos: [{ title: "Check logs", assigneeBotId: "Scout" }] }), readable: () => true, botName: (id) => BOTS.find((bot) => bot.id === id)?.name, postLine: (thread, text, ids) => { dir.lines.push([thread, text, ids]); } });
+    const route = createInternalTodoRoutes({ host: dir.host, from: { id: "chief" }, fromThreadId: "th", person: () => ({ key: "p_guest" }), readBody: async () => ({ todos: [{ title: "Check logs", assigneeBotId: "Scout" }] }), readable: () => true, botName: (id) => BOTS.find((bot) => bot.id === id)?.name, postLine: (thread, text, ids) => { dir.lines.push([thread, text, ids]); } });
     const sent: any = {};
     await route({ req: {} as never, res: {} as never, url: new URL("/api/internal/todos", "http://x"), path: "/api/internal/todos", method: "POST", auth: {} as never, readBody: (async () => null) as never, json: ((_r: unknown, status: number, body: unknown) => { sent.status = status; sent.body = body; }) as never });
     expect(sent.status).toBe(200);
     expect(sent.body.added[0]).toMatchObject({ title: "Check logs", botId: "scout", botName: "Scout" });
+    expect(sent.body.added[0].person).toBeUndefined();
+    // Its own conversation opens as the person of the conversation the bot was in (security).
+    expect(dir.store.get(sent.body.added[0].id)!.person).toEqual({ key: "p_guest" });
     expect(dir.lines).toHaveLength(1);
     expect(dir.lines[0]![1]).toContain("Check logs");
   });
@@ -64,6 +67,27 @@ describe("internal todo routes", () => {
       expect(sent.status).toBe(404);
     }
     expect(ctx.store.get(todo.id)!.status).toBe("open");
+  });
+
+  it("never matches a todo the caller may not read when a bot adds one with the same title (security)", async () => {
+    const ctx = setup();
+    const hidden = ctx.host.add([{ title: "Pay the team", botId: "scout", source: { threadId: "private" } }], { kind: "person", name: "Owner" }).todos[0]!;
+    const add = async (readable: (todo: { source?: { threadId: string } }) => boolean) => {
+      const route = createInternalTodoRoutes({ host: ctx.host, from: { id: "chief" }, fromThreadId: "th", readBody: async () => ({ todos: [{ title: "Pay the team", assigneeBotId: "Scout" }, { title: "Tell the team", afterIndex: 0 }] }), readable: readable as never, botName: () => undefined, postLine: () => {} });
+      const sent: any = {};
+      await route({ req: {} as never, res: {} as never, url: new URL("/api/internal/todos", "http://x"), path: "/api/internal/todos", method: "POST", auth: {} as never, readBody: (async () => null) as never, json: ((_r: unknown, status: number, payload: unknown) => { sent.status = status; sent.body = payload; }) as never });
+      return sent;
+    };
+    const refused = await add((todo) => todo.source?.threadId !== "private");
+    expect(refused.status).toBe(200);
+    expect(refused.body.existing).toEqual([]);
+    expect(refused.body.added.map((todo: { title: string }) => todo.title)).toEqual(["Pay the team", "Tell the team"]);
+    const [own, next] = refused.body.added as Array<{ id: string }>;
+    expect(own!.id).not.toBe(hidden.id);
+    expect(ctx.store.get(next!.id)!.start).toEqual({ kind: "after", todoId: own!.id });
+    expect(ctx.store.get(hidden.id)).toMatchObject({ title: "Pay the team", status: "queued" });
+    // A caller that may read the todo still gets the match.
+    expect((await add(() => true)).body.existing[0].id).toBe(hidden.id);
   });
 
   it("refuses a repeating todo from a bot with a plain reason", async () => {

@@ -2,10 +2,9 @@
 // leaves its throwaway folders behind. Each run sweeps the old ones. Other seira-* folders are not ours to delete: the
 // installed app keeps its sockets in seira-companion-origin-* and seira-ssh-* for longer than any run.
 import { lstatSync, readdirSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { TEST_HOME_PREFIX, TEST_TMP_PREFIX, testTmpPrefix } from "./test-tmp.ts";
+import { TEST_HOME_PREFIX, TEST_TMP_PREFIX, testTmpPrefix, testTmpRoot } from "./test-tmp.ts";
 
 /** Longer than the longest full run, so a folder this old belongs to no run that is still going. */
 export const STALE_TEST_DIR_MS = 4 * 60 * 60 * 1000;
@@ -24,7 +23,7 @@ export interface SweepResult {
 }
 
 /** Removes the folders of the files of one run, whatever their age: the run is over, and a file whose tests were all skipped never ran its own cleanup. */
-export function removeRunTestDirs(runId: string, base: string = tmpdir(), options: Pick<SweepOptions, "uid" | "remove"> = {}): SweepResult {
+export function removeRunTestDirs(runId: string, base: string = testTmpRoot(), options: Pick<SweepOptions, "uid" | "remove"> = {}): SweepResult {
   const { uid = process.getuid?.(), remove = (path) => rmSync(path, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }) } = options;
   const prefix = testTmpPrefix(runId);
   const result: SweepResult = { removed: [], failed: [] };
@@ -46,7 +45,7 @@ export function removeRunTestDirs(runId: string, base: string = tmpdir(), option
   return result;
 }
 
-export function sweepStaleTestDirs(base: string = tmpdir(), options: SweepOptions = {}): SweepResult {
+export function sweepStaleTestDirs(base: string = testTmpRoot(), options: SweepOptions = {}): SweepResult {
   const { now = Date.now(), maxAgeMs = STALE_TEST_DIR_MS, uid = process.getuid?.(), remove = (path) => rmSync(path, { recursive: true, force: true }) } = options;
   const result: SweepResult = { removed: [], failed: [] };
   let names: string[];

@@ -1,5 +1,5 @@
 // The bug report a bot writes after Seira's own error: offered under the turn, sent only when the person sends it.
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -40,9 +40,9 @@ function issueService() {
   return { send, issues, comments, received };
 }
 
-function fixture(options: { send?: DevsReportsDeps["send"]; outcomes?: SendOutcome[]; reactorOf?: DevsReportsDeps["reactorOf"]; personNames?: string[] } = {}) {
-  const dataDir = mkdtempSync(join(tmpdir(), "seira-bug-offers-"));
-  dirs.push(dataDir);
+function fixture(options: { send?: DevsReportsDeps["send"]; outcomes?: SendOutcome[]; reactorOf?: DevsReportsDeps["reactorOf"]; personNames?: string[]; dataDir?: string } = {}) {
+  const dataDir = options.dataDir ?? mkdtempSync(join(tmpdir(), "seira-bug-offers-"));
+  if (!options.dataDir) dirs.push(dataDir);
   const listeners = new Set<(change: StoreChange) => void>();
   const threads = new Map<string, Message[]>();
   let ids = 0, clock = Date.UTC(2026, 10, 19, 9, 0);
@@ -100,7 +100,7 @@ function fixture(options: { send?: DevsReportsDeps["send"]; outcomes?: SendOutco
     .flatMap(([, lines]) => lines.filter((one) => one.bugOffer !== undefined));
   const notices = () => [...threads.values()].flat().filter((one) => one.kind === "activity" && one.tool?.name.startsWith("notice:"));
   const kept = () => JSON.parse(readFileSync(join(dataDir, DEVS_REPORTS_FILE), "utf8"));
-  return { reports, store, sent, busy, ask, reply, step, turnFailed, settle, line, offers, notices, kept, advance: (ms: number) => { clock += ms; } };
+  return { dataDir, reports, store, sent, busy, ask, reply, step, turnFailed, settle, line, offers, notices, kept, advance: (ms: number) => { clock += ms; } };
 }
 
 /** A turn where Seira's own read_sheet step fails and the bot finishes another way. */
@@ -347,5 +347,64 @@ describe("a failed request in the app", () => {
     expect(fx.reports.draftThread(view.id)).toBe("scout-main");
     expect(fx.offers()).toEqual([]);
     expect(fx.sent).toEqual([]);
+  });
+  const LONG_ERROR = "TypeError: the composer cannot read the property of a very long named thing inside the sidebar panel that keeps going on and on";
+  const shownTitle = (view: { formUrl: string }) => new URL(view.formUrl).searchParams.get("title");
+
+  it("shows the title the form and the relay get, also when the error title is longer than 80 characters", async () => {
+    const fx = fixture();
+    fx.ask("scout-main");
+    const view = fx.reports.fromError("scout-main", LONG_ERROR, "user")!;
+    expect(view.title.length).toBeGreaterThan(80);
+    expect(shownTitle(view)).toBe(view.title);
+    expect(await fx.reports.sendDraft(view.id, "user")).toMatchObject({ state: "sent" });
+    expect(fx.sent[0]!.title).toBe(view.title);
+  });
+
+  it("keeps that one title for a draft restored after a restart", async () => {
+    const first = fixture();
+    first.ask("scout-main");
+    const view = first.reports.fromError("scout-main", LONG_ERROR, "user")!;
+    const second = fixture({ dataDir: first.dataDir });
+    const restored = second.reports.fromError("scout-main", LONG_ERROR, "user")!;
+    expect(restored.id).toBe(view.id);
+    expect(restored.title).toBe(view.title);
+    expect(shownTitle(restored)).toBe(view.title);
+    expect(await second.reports.sendDraft(view.id, "user")).toMatchObject({ state: "sent" });
+    expect(second.sent[0]!.title).toBe(view.title);
+  });
+
+  it("shows a draft an older version kept without a title in its payload the title the relay files", async () => {
+    const first = fixture();
+    first.ask("scout-main");
+    const view = first.reports.fromError("scout-main", LONG_ERROR, "user")!;
+    const file = join(first.dataDir, DEVS_REPORTS_FILE);
+    const kept = JSON.parse(readFileSync(file, "utf8"));
+    delete kept.drafts[0].payload.title;
+    writeFileSync(file, JSON.stringify(kept));
+    const second = fixture({ dataDir: first.dataDir });
+    const restored = second.reports.fromError("scout-main", LONG_ERROR, "user")!;
+    expect(restored.id).toBe(view.id);
+    expect(shownTitle(restored)).toBe(restored.title);
+    expect(await second.reports.sendDraft(view.id, "user")).toMatchObject({ state: "sent" });
+    expect(second.sent[0]!.title).toBe(restored.title);
+  });
+
+  it("gives a restored draft without any title the safe generic title, with secrets redacted before the title rules", async () => {
+    const first = fixture();
+    first.ask("scout-main");
+    const view = first.reports.fromError("scout-main", LONG_ERROR, "user")!;
+    const file = join(first.dataDir, DEVS_REPORTS_FILE);
+    const kept = JSON.parse(readFileSync(file, "utf8"));
+    delete kept.drafts[0].payload.title;
+    kept.drafts[0].payload.description = `https://example.com/only-a-url\nmore`;
+    writeFileSync(file, JSON.stringify(kept));
+    const second = fixture({ dataDir: first.dataDir });
+    const restored = second.reports.fromError("scout-main", LONG_ERROR, "user")!;
+    expect(restored.id).toBe(view.id);
+    expect(restored.title).toBe("Bug report from Seira");
+    expect(shownTitle(restored)).toBe("Bug report from Seira");
+    expect(await second.reports.sendDraft(view.id, "user")).toMatchObject({ state: "sent" });
+    expect(second.sent[0]!.title).toBe("Bug report from Seira");
   });
 });

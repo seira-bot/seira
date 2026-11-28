@@ -1,0 +1,74 @@
+---
+title: Windows app
+description: Install Seira on Windows 10 or later from the Microsoft Store or with the installer, and learn how each version updates.
+icon: Monitor
+---
+
+<a
+  href="https://apps.microsoft.com/detail/9MVFVK4VTFDH?referrer=appbadge&mode=direct"
+  className="not-prose inline-block"
+>
+  <img
+    src="/badges/microsoft-store.svg"
+    alt="Download from the Microsoft Store"
+    width={205}
+    height={56}
+    style={{ height: '3.5rem', width: 'auto' }}
+  />
+</a>
+
+Seira for Windows is the full desktop app. Your bots, the Seira server, and your agent engines all run on your computer.
+
+## What you need
+
+- Windows 10 or later, on x64.
+- At least one agent CLI, such as Claude Code or Codex, installed and signed in. See [Install an agent CLI](./installation.mdx#install-an-agent-cli).
+
+## Install from the Microsoft Store
+
+This is the recommended way.
+
+1. Open [Seira in the Microsoft Store](https://apps.microsoft.com/detail/9MVFVK4VTFDH?referrer=appbadge&mode=direct).
+2. Select **Get**.
+3. Open Seira from the Start menu.
+
+## Install with the installer
+
+1. Download [`Seira-setup.exe`](https://github.com/seira-bot/seira/releases/latest/download/Seira-setup.exe) from the latest release.
+2. Open the file. It installs Seira for your Windows user only.
+3. Open Seira from the Start menu.
+
+<Callout type="warn" title="Windows SmartScreen">
+  The installer is not code-signed yet. Windows may show “Unknown publisher.” Verify that you downloaded it from the official Seira releases repository before choosing **More info → Run anyway**. Seira from the Microsoft Store does not show this warning.
+</Callout>
+
+## Updates
+
+| Version | How it updates |
+|---|---|
+| Microsoft Store | The Microsoft Store updates the app. Seira shows no update button. |
+| Installer | Seira downloads the update. Choose **Restart to update**, and the app replaces itself and reopens. |
+
+See [Desktop updates](../troubleshooting/updates.mdx) if an update gets stuck.
+
+## Open Seira when you sign in
+
+- Installer version: turn on **Open at login** in **Settings → General → Startup**.
+- Microsoft Store version: Windows decides which packaged apps open at sign-in. Turn Seira on in **Startup apps** in Windows Settings.
+
+## What works on Windows
+
+| Capability | Windows x64 |
+|---|---|
+| The app, the server inside it, and local engines | Supported |
+| Your own VPS as a cloud computer, and connected apps | Supported |
+| Bot control of this computer | Supported |
+| Dictation and calls through Fish Audio | Supported |
+| Preview of the local screen | Not available |
+| Dictation on the device | Not available |
+
+## Next steps
+
+- [Make your first bot](./first-bot.mdx).
+- [Give a bot a computer](../computers/index.mdx).
+- [Pair your Android phone](../mobile/android-app.mdx).

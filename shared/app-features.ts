@@ -54,7 +54,7 @@ export const APP_FEATURES: readonly AppFeature[] = [
     id: "automations",
     name: "Automations",
     place: "Automations in the sidebar: the List and Calendar views of routines",
-    does: "Routines decide when a bot works: on a schedule, on an app event, or on a webhook call. A routine can also run a workflow. It is not the steps of the work; those belong to a workflow.",
+    does: "Routines decide when a bot works: on a schedule, on an app event, or on a webhook call. A routine can also run a workflow. The Calendar shows when each one runs by Day, Week or Month; drag a coming card to move it.",
     tools: ["trigger_info", "trigger", "delete_trigger"],
     automationViews: ["list", "calendar"],
     releaseNotes: ["sleepWhenIdle"],
@@ -117,7 +117,7 @@ export const APP_FEATURES: readonly AppFeature[] = [
     name: "People and access",
     place: "On a self-hosted server with email sign-in, in a browser or in the desktop app through Connect to a server: Settings → People, or Invite to this department / Invite to this bot in a department's or bot's menu. On a Team Cloud: People in the sidebar → Invite someone, which opens the team's People page on Seira Cloud. The desktop app's own computer has no invite: start a Team or run your own server",
     does: "An admin invites a person by email or @domain, as admin or user, to the whole team, chosen departments or chosen bots. A bot can invite, change or remove a person when the admin asks; the admin taps Apply, also from a phone.",
-    releaseNotes: ["departmentAccess", "inviteChosen", "emailCodes", "removedStaysOut"],
+    releaseNotes: ["departmentAccess", "inviteChosen", "emailCodes", "removedStaysOut", "inviteAnywhere"],
   },
   {
     id: "premium-key",
@@ -182,7 +182,7 @@ export const APP_FEATURES: readonly AppFeature[] = [
     place: "the menu under the person's name at the bottom of the sidebar",
     does: "Appearance, language, defaults for new bots, AI engines and keys. A bot changes a setting when the person asks: at once with Undo, or after a tap on Apply for a lasting effect. Keys and owner-only settings stay with the person.",
     tools: ["app_settings"],
-    releaseNotes: ["updateCheckHonest", "uiMap", "placeCard"],
+    releaseNotes: ["updateCheckHonest", "uiMap", "placeCard", "botSettings"],
   },
   {
     id: "text-size",
@@ -195,8 +195,15 @@ export const APP_FEATURES: readonly AppFeature[] = [
     id: "ai-engines",
     name: "AI engines",
     place: "Settings → AI",
-    does: "The AIs that bots use, by plan or by key. The AI pool shares work across several AIs: balance usage, take turns, or go in order. A bot sets it when you ask; only you add a pay-per-use AI. Each Claude account keeps its own approvals.",
-    releaseNotes: ["aiPool", "aiPoolEasy", "aiPoolBot", "claudeAccounts", "flatpakEngine", "aiSettings", "providerMenu", "providerInUse"],
+    does: "The AIs that bots use, by plan or by key. Each Claude account is its own AI and keeps its own approvals. To share work across several of them, use the AI pool.",
+    releaseNotes: ["claudeAccounts", "flatpakEngine", "aiSettings", "providerMenu", "providerInUse", "moveHideTarget"],
+  },
+  {
+    id: "ai-pool",
+    name: "AI pool",
+    place: "Settings → AI → AI pool",
+    does: "Shares work across two to ten AIs, such as several Claude accounts and Codex, so one plan's limit lasts longer: balance usage, take turns, or go in order. A bot sets it when you ask; only you add a pay-per-use AI.",
+    releaseNotes: ["aiPool", "aiPoolEasy", "aiPoolBot"],
   },
   {
     id: "models",
@@ -208,9 +215,9 @@ export const APP_FEATURES: readonly AppFeature[] = [
   },
   {
     id: "machine-budget",
-    name: "Heavy work on this computer",
+    name: "Heavy work and team size on this computer",
     place: "a bot's own work; no setting",
-    does: "Before a test suite, build, docker, video job, local model or large file, a bot checks free memory and processors. It starts only as many workers as fit, runs one heavy job at a time, and offers a lighter version when memory is short.",
+    does: "Before heavy work or a big new team, Seira checks this computer's memory, processors and disk. When the job or team is too big, the bot tells you first and offers a lighter way.",
     tools: ["machine_budget"],
   },
   {
@@ -337,7 +344,7 @@ export const APP_FEATURES: readonly AppFeature[] = [
     place: "Board in the sidebar, above Automations",
     does: "Shows all bot work in To do, Working, Needs you and Done, by column or by bot. New todo adds work for a bot, now, later or on chosen days. Open a card to answer, start, stop, finish or follow up.",
     tools: ["board_close", "todo_add", "todo_list", "todo_assign", "todo_update"],
-    releaseNotes: ["board", "boardDone"],
+    releaseNotes: ["board", "boardDone", "boardTodos"],
   },
   {
     id: "inbox",
@@ -381,7 +388,7 @@ export const APP_FEATURES: readonly AppFeature[] = [
     name: "The Seira app",
     place: "the whole app",
     does: "The app is named Seira everywhere. Chats, bots and settings carry over from earlier names. The window shows right away at start.",
-    releaseNotes: ["seiraName", "fasterStart", "linuxDesktop", "windowRecovers", "appIcon"],
+    releaseNotes: ["seiraName", "fasterStart", "linuxDesktop", "windowRecovers", "appIcon", "storeTools"],
   },
   {
     id: "crash-reports",

@@ -428,6 +428,8 @@ lines.on("close", () => process.exit(0));
     // Its claim on the browser dropped that connection, and nothing new reached Chrome.
     await until(() => fake.live.size === 0, "the held connection to drop");
     expect(fake.seen).toHaveLength(1);
+    // Chrome's side sees the socket end before the engine writes its "closed" line, so wait for the line.
+    await until(() => engineEvents().at(-1)?.event === "closed", "the engine to log that the connection closed");
     expect(engineEvents().at(-1)?.event).toBe("closed");
     // While that turn holds the browser, the door itself turns a connection away.
     expect(await doorAnswer(doorUrl())).toBe("HTTP/1.1 403 Forbidden");

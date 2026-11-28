@@ -6,7 +6,7 @@ import type { AppConfig } from "../config.ts";
 import { connectorRefusalText, connectorScopeRefusalText, evaluateConnectorTools } from "../connector-verdict.ts";
 import { appendDecision } from "../decision-log.ts";
 import { harnessMcpTokenEnv } from "../harness-mcp-token.ts";
-import { AGENTS_NODE_FLAG, SPAWNED_PROXIES } from "../proxy-paths.ts";
+import { AGENTS_NODE_FLAG, ownNode, SPAWNED_PROXIES } from "../proxy-paths.ts";
 import type { OutboundHoldAnswer } from "../outbound-hold.ts";
 import { GITHUB_RECONNECT_MESSAGE, GITHUB_UNREACHABLE_MESSAGE, GithubBrokerError, type GithubBrokerClient } from "./broker-client.ts";
 import { githubAppEnabled } from "./flag.ts";
@@ -150,7 +150,7 @@ export function createGithubHost(deps: GithubHostDeps) {
     available: () => allowedHere() && enabled(),
     integration(bot: GithubBot, mint: () => string, harnessUrl: string): { command: string; args: string[]; env: Record<string, string> } | null {
       if (!mounts(bot)) return null;
-      return { command: process.execPath, args: [SPAWNED_PROXIES.harnessMcp, "github"], env: { ...AGENTS_NODE_FLAG, [harnessMcpTokenEnv("github")]: mint(), SEIRA_HARNESS_URL: harnessUrl } };
+      return { command: ownNode(), args: [SPAWNED_PROXIES.harnessMcp, "github"], env: { ...AGENTS_NODE_FLAG, [harnessMcpTokenEnv("github")]: mint(), SEIRA_HARNESS_URL: harnessUrl } };
     },
     prompt(bot: GithubBot): string {
       const policy = policyOf(bot.id);

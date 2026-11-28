@@ -185,23 +185,32 @@ if (process.versions.electron && process.argv.includes(flag)) {
       assert.match(await pendingApproval, /server stopped/);
       // This inert fake intentionally hangs even after stdin closes. Reap only
       // the exact fixture-recorded engine, never a process-name match.
-      process.kill(fakePid, "SIGKILL");
+      const interruptedPid = fakePid;
+      process.kill(interruptedPid, "SIGKILL");
       fakePid = null;
       await until(() => active && active.pid !== initialPid, "replacement PID verified");
       const replacementPid = active.pid;
       assert.equal(JSON.parse(readFileSync(join(dataDir, ".seira-server-child/seira-server.lease"), "utf8")).pid, replacementPid);
+      // The replacement resumes the interrupted turn exactly once, telling the engine a restart cut it off
+      // (server/runtime/tree.ts), so the hung fake engine starts again: reap that one too.
+      const promptLines = () => readFileSync(join(home, "prompts.jsonl"), "utf8").trim().split("\n");
+      await until(() => promptLines().length === 2, "interrupted turn resumed once");
+      assert.equal(promptLines()[0], prompts.trim(), "the first prompt is kept as it was");
+      assert.match(promptLines()[1], /Seira restarted while your previous turn here was running/);
+      await until(() => JSON.parse(readFileSync(join(home, "fake.json"), "utf8")).pid !== interruptedPid, "resumed fake engine started");
+      fakePid = JSON.parse(readFileSync(join(home, "fake.json"), "utf8")).pid;
       const wait = await control("wait_for_conversation", { target_type: "bot", target_id: bot.id, task_id: bot.activeTaskId, timeout_seconds: 2 });
-      assert.equal(wait.target.busy, false);
+      assert.equal(wait.target.busy, true, "the resumed turn is running");
       const messages = await control("get_bot_messages", { bot_id: bot.id, task_id: bot.activeTaskId, limit: 10 });
-      assert.equal(messages.messages.filter((message) => message.role === "user").length, 1);
+      assert.equal(messages.messages.filter((message) => message.role === "user").length, 1, "the person's message is not added again");
       await sleep(1200);
-      assert.equal(readFileSync(join(home, "prompts.jsonl"), "utf8"), prompts, "recovery must not resend the turn");
+      assert.equal(promptLines().length, 2, "recovery resumes the turn once, not again");
       assert.equal((await approval.request(active, bot.id, "ask")).approvalMode, "ask");
       await control("create_bot", { name: "Replacement accepts fresh authorized writes" });
       const refused = await fetch(`${url}/api/bots`, { method: "POST", headers: { "content-type": "application/json" }, body: '{"name":"Must refuse"}' });
       assert.equal(refused.status, 403, "replacement remains fail-closed without the private token");
       finalReceipt = { passed: true, scenario, url, initialPid, replacementPid, commands,
-        checks: ["PID verified replacement", "same port", "unchanged parent lease", "replacement child lease", "immediate unavailable", "pending approval rejected", "new approval accepted", "private mutation capability restored", "unauthorized write refused", "interrupted turn retained once, not replayed"],
+        checks: ["PID verified replacement", "same port", "unchanged parent lease", "replacement child lease", "immediate unavailable", "pending approval rejected", "new approval accepted", "private mutation capability restored", "unauthorized write refused", "interrupted turn resumed exactly once"],
         limitation: "Headless fixture uses the production supervisor, probe, lease, approval protocol and built server, not the complete desktop bootstrap or renderer. The inert hung engine is explicitly reaped by the fixture." };
     } else {
       process.kill(initialPid, "SIGKILL");

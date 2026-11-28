@@ -32,7 +32,7 @@ import {
   type DockerHardeningConfig,
   type HostUser,
 } from "./container-isolation.ts";
-import { SPAWNED_PROXIES } from "./proxy-paths.ts";
+import { ownNode, SPAWNED_PROXIES } from "./proxy-paths.ts";
 import {
   CUA_DRIVER_VERSION,
   BASE_IMAGE_DIGEST,
@@ -1108,7 +1108,7 @@ export function containerComputerMcp(
   target: LocalVmTarget = SHARED_LOCAL_VM_TARGET,
 ): ContainerMcpLaunch {
   return {
-    command: process.execPath,
+    command: ownNode(),
     args: [containerMcpPath, runtime, localVmContainerName(target), CUA_SOCKET],
     // The control pair rides in env, not argv, which `ps` shows for the bridge's whole life.
     env: {

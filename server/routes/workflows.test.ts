@@ -2,13 +2,14 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { Workflow, WorkflowInput, WorkflowRun } from "../../shared/workflows.ts";
 import { atLeast, type BotAccessLevel } from "../../shared/bot-access.ts";
 import { frameForMember, routineRunVisible, routineVisible, VisibleSet, type StreamSeen, type Viewer } from "../bot-visibility.ts";
 import type { WorkflowHost } from "../host/workflow-host.ts";
 import { PlaceLostError } from "../place-lost.ts";
+import { PublicError } from "../public-error.ts";
 import type { RequestAuth } from "../request-auth.ts";
 import { RoutineRequestService, type RoutineRequestMessage, type RoutineRequestOptionCard, type RoutineRequestStore } from "../routine-requests.ts";
 import { RoutineManager, type Routine, type RoutineRun } from "../routines.ts";
@@ -61,7 +62,7 @@ function fixture(over: { workflows?: Workflow[]; runs?: WorkflowRun[]; routines?
     runAgain: over.again ?? ((runId: string, stepId: string) => { calls.push(`again ${runId} ${stepId}`); return { id: "run-new" } as RoutineRun; }),
   } as unknown as WorkflowHost;
   const visible = new VisibleSet(bots, [], over.viewer ?? BOB);
-  const routes = createWorkflowRoutes({ visible: () => visible, botName: (id) => names[id], workflows: () => host, routines: () => ({ listRoutines: () => routines }),
+  const routes = createWorkflowRoutes({ visible: () => visible, botName: (id) => names[id], workflows: () => host, routines: () => ({ listRoutines: () => routines, update: () => null }), starts: () => null,
     routineEdits: over.edits ?? { writer: () => "me", refusal: () => null, edit: (_auth, _routines, change) => change() },
     botsRefusal: (_auth, ids, needed) => (ids.some((id) => !atLeast(over.levels?.[id] ?? "edit", needed)) ? "You can't change this bot." : null),
     routineNeeds: (_auth, id) => (id === undefined || over.own?.includes(id) ? "chat" : "edit") });
@@ -254,8 +255,14 @@ describe("workflow routes", () => {
     expect(await fixture({ again: () => null }).call("POST", again)).toMatchObject({ status: 409, body: { error: "The routine can't run now." } });
     expect(await fixture({ again: () => { throw new PlaceLostError(); } }).call("POST", again))
       .toMatchObject({ status: 409, body: { error: expect.stringMatching(/Choose where it runs/) } });
-    expect(await fixture({ again: () => { throw new Error("could not prepare"); } }).call("POST", again))
-      .toMatchObject({ status: 500, body: { error: "could not prepare" } });
+    expect(await fixture({ again: () => { throw new PublicError("That step is no longer in the workflow.", 409); } }).call("POST", again))
+      .toMatchObject({ status: 409, body: { error: "That step is no longer in the workflow." } });
+    expect(await fixture({ again: () => { throw new PublicError("Wait for the backup to finish.", 423); } }).call("POST", again))
+      .toMatchObject({ status: 423, body: { error: "Wait for the backup to finish." } });
+    const quiet = vi.spyOn(console, "error").mockImplementation(() => {});
+    expect(await fixture({ again: () => { throw new Error("EACCES: permission denied, open '/Users/someone/.seira/workflows/runs.json'"); } }).call("POST", again))
+      .toMatchObject({ status: 500, body: { error: "The run could not start." } });
+    quiet.mockRestore();
   });
 
   it("refuses to change a workflow that runs a routine the person can't change", async () => {
@@ -314,7 +321,7 @@ describe("workflow routes", () => {
     const { host, visible } = fixture();
     expect(workflowTargetHidden({ workflowId: "secret" }, visible, host)).toBe("no such workflow");
     expect(workflowTargetHidden({ workflowId: "open" }, visible, host)).toBeNull();
-    expect(workflowTargetHidden({ workflowId: "gone" }, visible, host)).toBeNull();
+    expect(workflowTargetHidden({ workflowId: "gone" }, visible, host)).toBe("no such workflow");
     expect(workflowTargetHidden({ name: "plain" }, visible, host)).toBeNull();
     expect(workflowTargetHidden({ workflowId: "secret" }, new VisibleSet(bots, [], { kind: "all" }), host)).toBeNull();
     expect(workflowTargetHidden({ workflowId: "secret" }, visible, null)).toBeNull();

@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { STARTUP_TASK_ID, storeVersion } from "./appx-manifest.mjs";
+import { APP_EXECUTION_ALIAS, STARTUP_TASK_ID, storeVersion } from "./appx-manifest.mjs";
 
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -46,6 +46,12 @@ export function checkManifest(xml, { version }) {
   const task = [...xml.matchAll(/<(?:\w+:)?StartupTask\b[^>]*>/g)].map(([tag]) => tag).find((tag) => attribute(tag, "TaskId") === STARTUP_TASK_ID);
   if (!task) errors.push(`the manifest has no startup task ${STARTUP_TASK_ID}`);
   else if (attribute(task, "Enabled") !== "false") errors.push(`the startup task ${STARTUP_TASK_ID} is not off by default`);
+
+  const executable = attribute(/<Application\b[^>]*>/.exec(xml)?.[0] ?? "", "Executable");
+  const aliases = [...xml.matchAll(/<(?:\w+:)?Extension\b[^>]*Category="windows\.appExecutionAlias"[^>]*>([\s\S]*?)<\/(?:\w+:)?Extension>/g)];
+  const alias = aliases.find(([, body]) => new RegExp(`<(?:\\w+:)?ExecutionAlias\\b[^>]*\\sAlias="${APP_EXECUTION_ALIAS.replace(".", "\\.")}"`).test(body));
+  if (!alias) errors.push(`the manifest has no app execution alias ${APP_EXECUTION_ALIAS}`);
+  else if (attribute(alias[0], "Executable") !== executable) errors.push(`the app execution alias ${APP_EXECUTION_ALIAS} does not start ${executable}`);
 
   return { errors, identity };
 }

@@ -473,6 +473,7 @@ export const ROUTE_TEMPLATES: readonly string[] = `
 /api/routines
 /api/routines/:id
 /api/routines/:id/run
+/api/routines/:id/skip
 /api/routines/wake
 /api/search
 /api/seats

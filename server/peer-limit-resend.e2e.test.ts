@@ -7,6 +7,7 @@ import { expect, it } from "vitest";
 import { launchVerificationServer, runControlSeira, verificationServerEnvironment } from "../scripts/control-seira.ts";
 import { waitForExit } from "./testing/cleanup.ts";
 import { readHandoffs } from "./testing/handoff-rows.ts";
+import { readJsonLines } from "./testing/json-lines.ts";
 
 const LIMIT = "You've hit your weekly limit · resets Oct 12 at 2:30pm (Asia/Calcutta)";
 const BACKUP_REPLY = "done from fake codex";
@@ -16,8 +17,7 @@ async function finishedHandoff(dataDir: string, botId: string) {
     .toMatch(/^(completed|failed)$/);
   return readHandoffs(dataDir).find((node) => node.botId === botId)!;
 }
-const jsonLines = (path: string): any[] => existsSync(path)
-  ? readFileSync(path, "utf8").split("\n").filter(Boolean).map((line) => JSON.parse(line)) : [];
+const jsonLines = (path: string): any[] => readJsonLines(path);
 
 /** A Chief on one Claude sign-in hands work to a specialist on another ("helper"), with Codex as the other AI. */
 async function withHandoffFixture(helperPlan: Record<string, unknown>, check: (fixture: {

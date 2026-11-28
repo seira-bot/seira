@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { builtInBrowserEnabled, parseSkillReviewSteps, roomMemoryCaptureEnabled, savedStepsEnabled, shareLearnedSkillsMode, sharedComputersEnabled, showToolCallsEnabled, skillAuthoringEnabled, skillReviewEnabled, skillReviewSteps, skillReviewUnavailableEngines, usbPhoneTakeoverEnabled } from "./feature-flags";
+import { builtInBrowserEnabled, newAutomationsEnabled, parseSkillReviewSteps, roomMemoryCaptureEnabled, savedStepsEnabled, shareLearnedSkillsMode, sharedComputersEnabled, showToolCallsEnabled, skillAuthoringEnabled, skillReviewEnabled, skillReviewSteps, skillReviewUnavailableEngines, usbPhoneTakeoverEnabled } from "./feature-flags";
 
 describe("experimental feature flags", () => {
   it("keeps skill authoring on by default, before and after the config arrives", () => {
@@ -100,5 +100,14 @@ describe("saved steps flag", () => {
     expect(savedStepsEnabled(null)).toBe(true);
     expect(savedStepsEnabled({ features: {} })).toBe(true);
     expect(savedStepsEnabled({ features: { savedSteps: false } })).toBe(false);
+  });
+});
+
+describe("new automations flag", () => {
+  it("is off unless the config turns it on", () => {
+    expect(newAutomationsEnabled(null)).toBe(false);
+    expect(newAutomationsEnabled({ features: {} })).toBe(false);
+    expect(newAutomationsEnabled({ features: { newAutomations: false } })).toBe(false);
+    expect(newAutomationsEnabled({ features: { newAutomations: true } })).toBe(true);
   });
 });
