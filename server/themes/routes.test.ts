@@ -8,6 +8,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { json, readBody } from "../harness/http.ts";
 import type { RequestAuth } from "../request-auth.ts";
 import { callRoute } from "../routes/call-route.ts";
+import type { SideJobText } from "../side-jobs.ts";
 import { createThemeRoutes } from "./routes.ts";
 import { createThemeStore } from "./store.ts";
 
@@ -128,5 +129,63 @@ describe("theme routes", () => {
     expect(await callRoute(routes, { method: "GET", path: "/api/themes/active", auth: ann })).toMatchObject({ status: 200, body: { id: "popular-catppuccin", theme: { name: "Catppuccin" } } });
     expect(await callRoute(routes, { method: "GET", path: "/api/themes", auth: ann })).toEqual({ status: 200, body: { active: "popular-catppuccin", themes: [] } });
     expect(await callRoute(routes, { method: "PUT", path: "/api/themes/active", body: { id: "popular-nope" }, auth: ann })).toMatchObject({ status: 404 });
+  });
+});
+
+describe("theme ideas route", () => {
+  const recipes = ["Latte", "Mocha", "Espresso"].map((name, index) => ({ name, description: `${name} is calm`, light: { canvas: `#f${index}f${index}f${index}`, accent: "#b5532a" }, dark: { canvas: `#0${index}0${index}0${index}`, accent: "#e0a070" } }));
+
+  function ideasFixture(writer: SideJobText | null | "off") {
+    const dataDir = mkdtempSync(join(tmpdir(), "theme-ideas-"));
+    cleanup.push(() => rmSync(dataDir, { recursive: true, force: true }));
+    const store = createThemeStore({ dataDir });
+    const asked: Array<{ auth: RequestAuth; botId: string | undefined }> = [];
+    const changed: string[] = [];
+    const routes = createThemeRoutes({
+      store, changed: (person) => changed.push(person), person: (auth) => (auth.kind === "session" ? (auth.session.id === "s-ann" ? "p_ann" : null) : "owner"),
+      ...(writer === "off" ? {} : { ideaWriter: (auth: RequestAuth, botId: string | undefined) => { asked.push({ auth, botId }); return writer; } }),
+    });
+    return { store, routes, asked, changed };
+  }
+  const good: SideJobText = { via: "engine", generateText: async () => `Here:\n${JSON.stringify(recipes)}` };
+
+  it("answers with recipes and changes nothing", async () => {
+    const { routes, store, asked, changed } = ideasFixture(good);
+    const reply = await callRoute(routes, { method: "POST", path: "/api/themes/ideas", body: { botId: "bot-1", words: "coffee shop" }, auth: ann });
+    expect(reply).toEqual({ status: 200, body: { recipes } });
+    expect(asked).toEqual([{ auth: ann, botId: "bot-1" }]);
+    expect(store.list("p_ann")).toEqual({ active: null, themes: [] });
+    expect(changed).toEqual([]);
+  });
+
+  it("answers a plain failure when no recipe is usable, the call fails, and a distinct refusal when no bot can write", async () => {
+    const nothing: SideJobText = { via: "engine", generateText: async () => "no" };
+    const broken: SideJobText = { via: "engine", generateText: async () => { throw new Error("boom"); } };
+    for (const writer of [nothing, broken]) {
+      const { routes } = ideasFixture(writer);
+      expect(await callRoute(routes, { method: "POST", path: "/api/themes/ideas", body: { words: "x" }, auth: ann })).toEqual({ status: 502, body: { error: expect.any(String), reason: "failed" } });
+    }
+    for (const writer of [null, "off"] as const) {
+      const { routes } = ideasFixture(writer);
+      expect(await callRoute(routes, { method: "POST", path: "/api/themes/ideas", body: { words: "x" }, auth: ann })).toEqual({ status: 409, body: { error: expect.any(String), reason: "no-writer" } });
+    }
+  });
+
+  it("asks for what look to make, refuses other fields, and keeps to the person rules of the other theme routes", async () => {
+    const { routes, asked } = ideasFixture(good);
+    for (const body of [{}, { botId: "b" }, { refine: "Darker" }, { words: "x", css: "a{}" }, { words: "x", pictureColours: ["nope"] }]) {
+      expect(await callRoute(routes, { method: "POST", path: "/api/themes/ideas", body, auth: ann }), JSON.stringify(body)).toMatchObject({ status: 400 });
+    }
+    expect(await callRoute(routes, { method: "POST", path: "/api/themes/ideas", body: { words: "x" }, auth: guest })).toMatchObject({ status: 403 });
+    expect(asked).toEqual([]);
+  });
+
+  it("keeps the base theme's idea when it refines", async () => {
+    const prompts: string[] = [];
+    const { routes } = ideasFixture({ via: "engine", generateText: async (prompt) => { prompts.push(prompt); return JSON.stringify(recipes); } });
+    const reply = await callRoute(routes, { method: "POST", path: "/api/themes/ideas", body: { base: recipes[0], refine: "Warmer" }, auth: ann });
+    expect(reply.status).toBe(200);
+    expect(prompts[0]).toContain(JSON.stringify(recipes[0]));
+    expect(prompts[0]).toContain("Warmer");
   });
 });

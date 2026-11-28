@@ -101,3 +101,32 @@ it("puts a popular theme on at once, and moves a skin with effects back to follo
   expect(calls.find((call) => (call.body as { id?: string } | undefined)?.id === "popular-nord")?.body).toEqual({ id: "popular-nord" });
   expect(await runtime.wearPopularTheme("popular-nope")).toBe(false);
 });
+
+it("previews a theme in this window only, over the worn one, and ends it", async () => {
+  values.set("seira-skin", "midnight");
+  const runtime = await import("./runtime");
+  const fetched = vi.fn();
+  vi.stubGlobal("fetch", fetched);
+  runtime.wearTheme({ id: "worn", theme: { name: "Worn", skin: "system", ...bothModes } });
+  const cached = values.get("seira-theme");
+  runtime.previewTheme({ name: "Trial", skin: "system", light: bothModes.light, dark: { canvas: "#0b1020", accent: "#7aa2ff" } });
+  expect(appColor()).toBe("#0b1020");
+  expect(runtime.previewingTheme()?.name).toBe("Trial");
+  expect(values.get("seira-theme")).toBe(cached);
+  expect(fetched).not.toHaveBeenCalled();
+  runtime.previewTheme(null);
+  expect(appColor()).toBe("#121212");
+  expect(runtime.previewingTheme()).toBeNull();
+});
+
+it("ends a preview when a theme is worn here or a theme frame arrives", async () => {
+  values.set("seira-skin", "midnight");
+  const runtime = await import("./runtime");
+  vi.stubGlobal("fetch", vi.fn(async () => ({ ok: false })));
+  runtime.previewTheme({ name: "Trial", skin: "system", ...bothModes });
+  runtime.wearTheme({ id: "other", theme: { name: "Other", skin: "system", ...bothModes } });
+  expect(runtime.previewingTheme()).toBeNull();
+  runtime.previewTheme({ name: "Trial", skin: "system", ...bothModes });
+  runtime.applyThemeFrame({});
+  expect(runtime.previewingTheme()).toBeNull();
+});

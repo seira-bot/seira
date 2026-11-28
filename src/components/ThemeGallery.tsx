@@ -6,6 +6,8 @@ import { cn } from "@/lib/cn";
 import { useColorScheme } from "@/lib/color-scheme";
 import { t } from "@/lib/i18n";
 import { subscribeTheme, wearPopularTheme, wornTheme } from "@/lib/theme/runtime";
+import { AiThemeCard } from "./AiThemeCard";
+import type { AiThemeRequest } from "./ai-theme-request";
 import { SettingsGroup, SettingsRows } from "./SettingsPrimitives";
 import { SkinPicker } from "./SkinPicker";
 import { ThemePreview } from "./ThemePreview";
@@ -38,11 +40,12 @@ function PopularCard({ entry, selected, mode }: { entry: PopularTheme; selected:
 }
 
 /** Settings → Appearance: the popular themes and Seira's own skins as cards; one tap wears it in every window. */
-export function ThemeGallery() {
+export function ThemeGallery({ onMake }: { onMake?: (request: AiThemeRequest) => void } = {}) {
   const mode = useColorScheme();
   const wornId = useSyncExternalStore(subscribeTheme, () => wornTheme()?.id ?? null, () => null);
   return (
     <>
+      {onMake && <AiThemeCard onMake={onMake} />}
       <SettingsGroup label={t("settings.gallery.popular")} block="themes" description={t("settings.gallery.popularHint")}>
         <SettingsRows>
           <div className="grid grid-cols-[repeat(auto-fill,minmax(168px,1fr))] gap-x-4 gap-y-5 p-4" role="radiogroup" aria-label={t("settings.gallery.popular")}>

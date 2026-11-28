@@ -155,6 +155,23 @@ describe("the helper setting", () => {
   });
 });
 
+describe("theme ideas", () => {
+  it("run on the bot's own engine, one-off or background, and on no other when the bot has none", async () => {
+    const { jobs, claude, codex, openrouter } = setup({ helper: { instanceId: "openrouter" } });
+    expect(await jobs.text("theme-ideas", "claude")!.generateText("p")).toBe("claude wrote this");
+    expect(claude.calls).toHaveLength(1);
+    expect(await jobs.text("theme-ideas", "codex")!.generateText("p")).toBe("codex's own engine wrote this");
+    expect(codex.calls).toHaveLength(1);
+    expect(await jobs.text("theme-ideas", "pi")!.generateText("p")).toBe("openrouter wrote this");
+    expect(openrouter.calls).toHaveLength(1);
+  });
+
+  it("have no writer when the bot's engine and the helper both cannot write", () => {
+    const { jobs } = setup({ helper: null });
+    expect(jobs.text("theme-ideas", "pi")).toBeNull();
+  });
+});
+
 describe("the setup card's answers", () => {
   const catalog: SideJobInstance["models"] = { default: "x-large", options: [{ id: "x-large", label: "X large" }, { id: "x-mini", label: "X mini" }] };
   function card(options: { quickModelsUsable?: boolean; modelAllowed?: SideJobsDeps["modelAllowed"]; reply?: () => string } = {}) {

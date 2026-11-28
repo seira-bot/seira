@@ -2,9 +2,12 @@ import { createReadStream } from "node:fs";
 import { z } from "zod";
 
 import { storedSkinSchema } from "../../shared/app-settings.ts";
+import { THEME_IDEAS_PATH, themeIdeasRequestSchema, type ThemeIdeasFailure, type ThemeIdeasReply } from "../../shared/theme-ideas.ts";
 import { THEME_ID, THEME_LIMITS, themeExportSchema, themeFileSchema, type ThemeHistoryItem } from "../../shared/theme.ts";
 import type { RequestAuth } from "../request-auth.ts";
+import type { SideJobText } from "../side-jobs.ts";
 import { PASS, type RouteHandler } from "../routes/table.ts";
+import { makeThemeIdeas } from "./ideas.ts";
 import { isRefusal, type ThemeStore } from "./store.ts";
 
 const THEME_PATH = /^\/api\/themes\/([a-z0-9][a-z0-9-]{0,47})(\/duplicate|\/export)?$/;
@@ -22,6 +25,9 @@ export interface ThemeRoutesDeps {
   person(auth: RequestAuth): string | null;
   /** Tells that person's open windows to load their theme again, and to wear `skin` when given. */
   changed(person: string, skin?: string): void;
+  /** The one-off writer of the bot that makes theme ideas for this request: `botId` when this person may use it, else their Seira.
+   * Null: no bot can write. Absent: the route is off. */
+  ideaWriter?(auth: RequestAuth, botId: string | undefined): SideJobText | null;
 }
 
 export function createThemeRoutes(deps: ThemeRoutesDeps): RouteHandler {
@@ -65,6 +71,23 @@ export function createThemeRoutes(deps: ThemeRoutesDeps): RouteHandler {
       if (isRefusal(done)) return json(res, 404, { error: done.refusal });
       deps.changed(person, done.skin);
       return json(res, 200, { ok: true });
+    }
+    if (path === THEME_IDEAS_PATH && method === "POST") {
+      const parsed = themeIdeasRequestSchema.safeParse(await readBody(req));
+      if (!parsed.success) return json(res, 400, { error: parsed.error.issues.map((issue) => issue.message).join("; ") });
+      const { botId, ...request } = parsed.data;
+      const stop = new AbortController();
+      const leave = () => { if (!res.writableEnded) stop.abort(); };
+      if (typeof res.on === "function") res.on("close", leave);
+      try {
+        const outcome = await makeThemeIdeas(deps.ideaWriter ? deps.ideaWriter(auth, botId) : null, request, stop.signal);
+        if (stop.signal.aborted) return;
+        if ("recipes" in outcome) return json(res, 200, { recipes: outcome.recipes } satisfies ThemeIdeasReply);
+        if ("noWriter" in outcome) return json(res, 409, { error: "No bot can make themes right now.", reason: "no-writer" } satisfies ThemeIdeasFailure);
+        return json(res, 502, { error: "No theme came out of that.", reason: "failed" } satisfies ThemeIdeasFailure);
+      } finally {
+        if (typeof res.off === "function") res.off("close", leave);
+      }
     }
     if (path === "/api/themes/history") {
       const items = store.history(person);

@@ -10,10 +10,12 @@ import { applyThemeCss } from "./theme-css";
 
 const CACHE_KEY = "seira-theme";
 const SAFE_KEY = "seira-safe-look";
+const PREVIEW_ID = "__preview";
 
 export type WornTheme = { id: string; theme: ThemeFile };
 
 let worn: WornTheme | null = null;
+let preview: WornTheme | null = null;
 let painted: string[] = [];
 let painting = false;
 const listeners = new Set<() => void>();
@@ -58,7 +60,8 @@ function paint(): void {
   try {
     const root = document.documentElement;
     clearPaint(root);
-    const theme = safeLook() ? null : worn?.theme;
+    const shown = preview ?? worn;
+    const theme = safeLook() ? null : shown?.theme;
     if (!theme) {
       delete root.dataset.theme;
       delete root.dataset.themeBubble;
@@ -85,7 +88,7 @@ function paint(): void {
       root.style.setProperty("--font-sans", theme.font);
       painted.push("--font-sans");
     }
-    root.dataset.theme = worn!.id;
+    root.dataset.theme = shown!.id;
     if (colors["bubble-user"]) root.dataset.themeBubble = "";
     else delete root.dataset.themeBubble;
     applyThemeCss(theme.css ?? "");
@@ -98,12 +101,26 @@ function paint(): void {
 /** Wears `next` in this window, remembering it so the next start paints it before the server answers. */
 export function wearTheme(next: WornTheme | null): void {
   worn = next;
+  preview = null;
   try {
     if (next) storage("localStorage")?.setItem(CACHE_KEY, JSON.stringify(next));
     else storage("localStorage")?.removeItem(CACHE_KEY);
   } catch {
   }
   paint();
+}
+
+/** Paints `theme` in this window only, over what is worn, until it is ended or another theme is worn here. Nothing is
+ * remembered for the next start and nothing reaches the server or the person's other windows. */
+export function previewTheme(theme: ThemeFile | null): void {
+  if (!theme && !preview) return;
+  preview = theme ? { id: PREVIEW_ID, theme } : null;
+  paint();
+}
+
+/** The theme painted by `previewTheme`, or null. The same object until it changes. */
+export function previewingTheme(): ThemeFile | null {
+  return preview?.theme ?? null;
 }
 
 function cachedTheme(): WornTheme | null {
@@ -130,6 +147,7 @@ export async function loadTheme(): Promise<void> {
 
 /** A `theme` frame: this person's theme changed in another window, in Settings or by a bot. */
 export function applyThemeFrame(frame: { skin?: string }): void {
+  previewTheme(null);
   const skin = frame.skin;
   if (skin === "system" || SKIN_IDS.includes(skin as (typeof SKIN_IDS)[number])) applySkinChoice(skin as SkinChoice);
   void loadTheme();
@@ -153,18 +171,22 @@ export async function chooseTheme(id: string | null, skin?: SkinChoice): Promise
   return done;
 }
 
-/** Wears a popular theme at once here, then in the person's other windows. A skin with its own effects (Pop, Halloween,
+/** Wears a theme file at once here, then in the person's other windows. A skin with its own effects (Pop, Halloween,
  * Aurora) would paint under the theme, so the skin goes back to following the computer; Light, Dark and System stay. */
-export async function wearPopularTheme(id: string): Promise<boolean> {
-  const entry = popularTheme(id);
-  if (!entry) return false;
+export async function wearThemeFile(id: string, theme: ThemeFile): Promise<boolean> {
   const choice = readSkinChoice();
   const plain = choice === "system" || choice === THEME_SKINS.light || choice === THEME_SKINS.dark;
   if (!plain) applySkinChoice("system");
-  wearTheme({ id, theme: entry.theme });
+  wearTheme({ id, theme });
   const done = await chooseTheme(id, plain ? undefined : "system");
   if (!done) await loadTheme();
   return done;
+}
+
+/** Wears a popular theme here and in the person's other windows. */
+export async function wearPopularTheme(id: string): Promise<boolean> {
+  const entry = popularTheme(id);
+  return entry ? wearThemeFile(id, entry.theme) : false;
 }
 
 /** The way back from any theme: drops it and wears the default skin, whatever the server says. */
