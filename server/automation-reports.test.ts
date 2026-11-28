@@ -7,6 +7,7 @@ import "./server-line-packs.ts";
 import { clipRunOutput } from "./routine-lines.ts";
 import { automationContextText, createAutomationReports, newestAutomationLines, readRunReply, recoveredText, routineRunNeedsReview } from "./automation-reports.ts";
 import { DATA_DIR } from "./config.ts";
+import { createResultRooms, type ResultRoomDeps } from "./workflows/result-room.ts";
 import type { RoutineRun } from "./routines.ts";
 import { Store, type BotRecord, type Message } from "./store.ts";
 
@@ -83,7 +84,7 @@ describe("what the chat's own session reads", () => {
 });
 
 /** A real Store; the routine runs live in a stand-in for the RoutineManager, which keeps their report states. */
-function fixture(options: { threadLanguage?: (threadId: string) => string | undefined } = {}) {
+function fixture(options: { threadLanguage?: (threadId: string) => string | undefined; rooms?: Omit<ResultRoomDeps, "room"> } = {}) {
   const store = new Store(selection);
   const bot = store.createBot({ name: "Pepper" });
   const main = bot.threadId;
@@ -111,6 +112,7 @@ function fixture(options: { threadLanguage?: (threadId: string) => string | unde
     wrote: (_bot: BotRecord, threadId) => wrote.push(threadId),
     notify: (kind, _bot, threadId, detail) => notified.push({ kind, threadId, detail }),
     ...(options.threadLanguage ? { threadLanguage: options.threadLanguage } : {}),
+    ...(options.rooms ? { resultRoom: createResultRooms({ store, ...options.rooms }) } : {}),
   });
   const reports = create();
   let serial = 0;
@@ -773,6 +775,39 @@ describe("a workflow's Post results step", () => {
     f.reports.flush();
     expect(written).toEqual([]);
     expect(f.lines()).toHaveLength(0);
+  });
+
+  it("a post webhook with a workflow posts the last result in the room, as the bot that wrote it", () => {
+    let roomId = "";
+    const steps = [{ stepId: "a", status: "done" as const, botId: "" }, { stepId: "b", status: "done" as const, botId: "", fromStepId: "a" }];
+    const f = fixture({ rooms: { webhookRoom: (id) => (id === "hook-1" ? roomId : undefined), workflowRun: () => ({ stepRuns: steps }) } });
+    const writer = f.store.createBot({ name: "Writer" });
+    const room = f.store.createGroup("Morning room", [f.bot.id, writer.id]);
+    roomId = room.id;
+    steps[0]!.botId = f.bot.id;
+    steps[1]!.botId = writer.id;
+    const run = f.finished("", "Room post", { status: "running", triggerSource: "webhook", webhookId: "hook-1", workflowId: "w1", postsResult: true });
+    f.busy.add(room.threadId);
+    const written: string[] = [];
+    f.reports.postStep(run, "b", "Sales are up 4%.", (id) => written.push(id));
+    f.reports.postStep(run, "b", "Sales are up 4%.", (id) => written.push(id));
+    const said = f.store.messagesFor(room.threadId).filter((message) => message.automation?.workflowStepId === "b");
+    expect(said).toHaveLength(1);
+    expect(said[0]).toMatchObject({ role: "bot", text: "Sales are up 4%.", from: { botId: writer.id, name: "Writer" }, automation: { runId: run.id } });
+    expect(written).toEqual([said[0]!.id, said[0]!.id]);
+    expect(f.store.group(room.id)?.unread).toBe(true);
+    expect(f.lines()).toEqual([]);
+    expect(f.wrote).toEqual([]);
+  });
+
+  it("posts in the bot's own chats when the bot that wrote the result left the room", () => {
+    let roomId = "";
+    const f = fixture({ rooms: { webhookRoom: () => roomId, workflowRun: () => ({ stepRuns: [{ stepId: "b", status: "done", botId: "gone" }] }) } });
+    roomId = f.store.createGroup("Morning room", [f.bot.id]).id;
+    const run = f.finished("", "Room post", { status: "running", triggerSource: "webhook", webhookId: "hook-1", workflowId: "w1", postsResult: true });
+    f.reports.postStep(run, "b", "Done.", () => {});
+    expect(f.lines().map((line) => line.text)).toEqual(["Done."]);
+    expect(f.store.messagesFor(f.store.group(roomId)!.threadId).some((message) => message.automation)).toBe(false);
   });
 
   it("waits while the chat is busy and writes after it", () => {
