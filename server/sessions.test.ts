@@ -339,6 +339,8 @@ describe("pairing codes", () => {
   });
 
   describe("device labels", () => {
+    /** True when the text holds no lone surrogate: UTF-8 turns each one into U+FFFD, so the round trip changes it. */
+    const wellFormed = (text: string) => Buffer.from(text, "utf8").toString("utf8") === text;
     const labelAfter = (label: string) => {
       const id = pair("MacBook").session.id;
       const result = registry.rename(id, label);
@@ -369,7 +371,7 @@ describe("pairing codes", () => {
       const cut = labelAfter(`${"a".repeat(78)}${family}`).label!;
       expect(cut).toBe(`${"a".repeat(78)}👨`);
       expect(labelAfter(`${"a".repeat(79)}\u200dbbbbb`).label).toBe("a".repeat(79));
-      for (const label of [cut, labelAfter("😀".repeat(60)).label!]) expect(label.isWellFormed()).toBe(true);
+      for (const label of [cut, labelAfter("😀".repeat(60)).label!]) expect(wellFormed(label)).toBe(true);
     });
 
     it("checks the stored value after the cut and the trim, not only the input", () => {
@@ -384,7 +386,7 @@ describe("pairing codes", () => {
       // Text that is not valid Unicode is not stored: lone surrogates and noncharacters.
       const lone = labelAfter("Kit\ud83dchen\ufdd0 \ude00iPad").label!;
       expect(lone).toBe("Kitchen iPad");
-      expect(lone.isWellFormed()).toBe(true);
+      expect(wellFormed(lone)).toBe(true);
     });
 
     it("gives the same label when the stored label goes through the rules again", () => {
@@ -395,7 +397,7 @@ describe("pairing codes", () => {
       for (const input of inputs) {
         const first = labelAfter(input).label!;
         expect(first.length).toBeLessThanOrEqual(80);
-        expect(first.isWellFormed()).toBe(true);
+        expect(wellFormed(first)).toBe(true);
         expect(first).toBe(first.normalize("NFC"));
         expect(labelAfter(first)).toEqual({ result: "renamed", label: first });
       }
@@ -408,6 +410,8 @@ describe("pairing codes", () => {
     });
 
     it("keeps the label apart from the email, role and id of the account", () => {
+      // An account with an email is live only while its email is a member, so this registry names one.
+      registry = new SessionRegistry({ file: file(), now: () => clock, emailScopes: () => ["client"] });
       const issued = registry.issue({ label: "phone", email: "person@example.test", scopes: ["client"] });
       const before = { id: issued.session.id, email: issued.session.email, key: personKey({ id: issued.session.id, email: issued.session.email }) };
       expect(registry.rename(issued.session.id, "boss@example.test \u202E admin")).toBe("renamed");
