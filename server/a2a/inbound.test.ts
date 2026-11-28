@@ -640,6 +640,52 @@ describe("the transport on a real link", () => {
   });
 });
 
+function slowCall(w: World, peer: Peer, body: unknown, whileWaiting: () => void): Promise<{ status: number; body: Json }> {
+  const url = new URL(`${w.base}/api/a2a/writer`);
+  const text = JSON.stringify(body), cut = Math.floor(text.length / 2);
+  return new Promise((resolve, reject) => {
+    const req = request({ host: url.hostname, port: url.port, path: url.pathname, method: "POST",
+      headers: { authorization: `Bearer ${peer.token}`, "content-type": "application/json", "content-length": String(Buffer.byteLength(text)) } }, (res) => {
+      const parts: Buffer[] = [];
+      res.on("data", (part: Buffer) => parts.push(part));
+      res.on("end", () => { resolve({ status: res.statusCode ?? 0, body: JSON.parse(Buffer.concat(parts).toString("utf8") || "null") as Json }); });
+    });
+    req.on("error", reject);
+    req.write(text.slice(0, cut));
+    setTimeout(() => { whileWaiting(); req.end(text.slice(cut)); }, 150);
+  });
+}
+
+describe("what is allowed when the request body has been read", () => {
+  it("starts no work when the peer's calls were turned off while the body was read", async () => {
+    const w = await world([{ label: "one" }]);
+    const [peer] = w.peers as [Peer];
+    const res = await slowCall(w, peer, sendMessage("m1"), () => { peer.inbound.close(); });
+    expect([res.status, res.body]).toEqual([401, NOT_VALID]);
+    expect(w.begun).toEqual([]);
+    expect(w.runs).toEqual([]);
+    expect(workKeys(peer)).toEqual([]);
+  });
+
+  it("starts no work when the bot stopped being offered to the peer while the body was read", async () => {
+    const w = await world([{ label: "one" }]);
+    const [peer] = w.peers as [Peer];
+    const res = await slowCall(w, peer, sendMessage("m1"), () => { peer.exposed.delete("writer"); });
+    expect([res.status, res.body]).toEqual([404, NO_AGENT]);
+    expect(w.begun).toEqual([]);
+    expect(w.runs).toEqual([]);
+    expect(workKeys(peer)).toEqual([]);
+  });
+
+  it("still starts the work when nothing changed while the body was read", async () => {
+    const w = await world([{ label: "one" }]);
+    const [peer] = w.peers as [Peer];
+    const res = await slowCall(w, peer, sendMessage("m1"), () => {});
+    expect(res.status).toBe(200);
+    await until(() => w.runs.length === 1, "m1 ran");
+  });
+});
+
 function chunked(w: World, peer: Peer, body: string): Promise<number> {
   const url = new URL(`${w.base}/api/a2a/writer`);
   return new Promise((resolve, reject) => {

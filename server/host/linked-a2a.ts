@@ -168,6 +168,11 @@ export function createLinkedA2a(deps: LinkedA2aDeps) {
   const origin = () => { const raw = deps.origin(); return raw ? guestOrigin(raw) : null; };
   const full = () => deps.seiraLinks() + file.peers.length >= LINKS_MAX;
   const outboundToken = (rt: Runtime) => rt.link.dial()?.token ?? "";
+  const originOfUrl = (href: string): string => new URL(href).origin;
+  /** The token goes only to the origin it was confirmed for. */
+  const tokenFits = (peer: A2aPeer): boolean => peer.url !== undefined && peer.tokenOrigin === originOfUrl(peer.url);
+  /** The token this server may send to the peer now: "" when none is held or it was confirmed for another origin. */
+  const sendableToken = (rt: Runtime): string => { const peer = recordOf(rt.id); return peer && tokenFits(peer) ? outboundToken(rt) : ""; };
 
   function cardUrls(peer: A2aPeer): CardUrl[] {
     const base = origin();
@@ -203,7 +208,7 @@ export function createLinkedA2a(deps: LinkedA2aDeps) {
     return createA2aOutbound({
       link: taking(rt.link), key: rt.key, place: rt.place,
       url: () => { const peer = recordOf(rt.id); return peer ? urlOf(peer) : null; },
-      token: () => rt.link.dial()?.token ?? null,
+      token: () => sendableToken(rt) || null,
       tasks: rt.tasks, cleaning: cleaningOf(rt.key), egress, now, log: rt.log,
     });
   }
@@ -275,7 +280,7 @@ export function createLinkedA2a(deps: LinkedA2aDeps) {
     return {
       id: peer.id, kind: "a2a", name: peer.name, state: !live ? "ended" : problem ? "offline" : "online",
       exposed: [...peer.exposed], cap: peer.cap, bots, createdAt: peer.createdAt,
-      outbound: peer.url ? { url: peer.url, hasToken: rt ? outboundToken(rt) !== "" : false } : null,
+      outbound: peer.url ? { url: peer.url, hasToken: rt ? sendableToken(rt) !== "" : false } : null,
       inbound: peer.tokenHash ? { urls: cardUrls(peer) } : null,
       problem,
     };
@@ -312,7 +317,8 @@ export function createLinkedA2a(deps: LinkedA2aDeps) {
       if (input.inbound && !origin()) throw new LinkedServerError(NO_ADDRESS, 409);
       const made = input.inbound ? newA2aToken() : null;
       const peer: A2aPeer = { id: deps.freshId(a2aKey), name, ...(url ? { url: url.href } : {}), ...(made ? { tokenHash: made.hash } : {}),
-        exposed: exposedOf(input.exposed ?? []), cap: input.cap ?? "ask", createdAt: now() };
+        exposed: exposedOf(input.exposed ?? []), cap: input.cap ?? "ask", createdAt: now(),
+        ...(url && input.token !== undefined ? { tokenOrigin: url.origin } : {}) };
       file.peers.push(peer);
       save();
       const rt = open(peer);
@@ -353,8 +359,10 @@ export function createLinkedA2a(deps: LinkedA2aDeps) {
         if (!next.url) throw new LinkedServerError(TOKEN_ALONE, 400);
         if (!OUTBOUND_TOKEN.test(patch.token)) throw new LinkedServerError(BAD_TOKEN, 400);
         token = patch.token;
-      } else if (patch.token === null || !next.url) token = "";
-      if (token !== outboundToken(rt)) changed.push("outboundToken");
+        next.tokenOrigin = originOfUrl(next.url);
+      } else if (patch.token === null || !next.url || !tokenFits(next)) token = "";
+      if (token === "") delete next.tokenOrigin;
+      if (token !== outboundToken(rt) || next.tokenOrigin !== peer.tokenOrigin) changed.push("outboundToken");
       if (patch.exposed) {
         const exposed = exposedOf(patch.exposed);
         if (JSON.stringify(exposed) !== JSON.stringify(peer.exposed)) { changed.push("exposed"); before.exposed = peer.exposed; after.exposed = exposed; next.exposed = exposed; }
@@ -435,7 +443,7 @@ export function createLinkedA2a(deps: LinkedA2aDeps) {
     /** Once the server is up: each peer's link is on, it is online, and its agent's card is read. */
     start(): void {
       for (const rt of runtimes.values()) {
-        if (!rt.link.has(rt.key)) turnOn(rt, "");
+        if (!rt.link.has(rt.key) || (outboundToken(rt) !== "" && sendableToken(rt) === "")) turnOn(rt, "");
         go(rt);
       }
     },

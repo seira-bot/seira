@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
@@ -461,6 +461,61 @@ describe("changing an A2A agent (AC-02)", () => {
     expect(await head.api("DELETE", `/api/linked-servers/${calleeId}`)).toEqual({ status: 200, body: { ok: true } });
     expect(readFileSync(links).equals(before)).toBe(true);
     for (const text of [JSON.stringify(head.rows), JSON.stringify(branch.rows)]) expect(text).not.toContain(token);
+  }, 60_000);
+});
+
+/** A far address that records the credential of each request it gets. */
+async function spy() {
+  const seen: Array<string | undefined> = [];
+  const http = createServer((req, res) => { seen.push(req.headers.authorization); req.resume(); res.writeHead(404).end(); });
+  await new Promise<void>((resolve) => http.listen(0, "127.0.0.1", resolve));
+  cleanups.push(async () => { http.closeAllConnections(); await new Promise<void>((resolve) => http.close(() => resolve())); });
+  return { seen, url: `http://127.0.0.1:${(http.address() as AddressInfo).port}/card.json` };
+}
+
+describe("the token goes only to the address it was confirmed for", () => {
+  it("sends the old token to no other address, and sends a new token only to the new address", async () => {
+    const head = await server("head", [WRITER]), branch = await server("branch", [SCOUT]);
+    const { token, callerId } = await pair(branch, head, ["writer"]);
+    const far = await spy();
+
+    const moved = await branch.api("PATCH", `/api/linked-servers/${callerId}`, { url: far.url });
+    expect(moved.body.server).toMatchObject({ outbound: { url: far.url, hasToken: false } });
+    expect(lastRow(branch, "linked-server.update")).toMatchObject({ changed: expect.arrayContaining(["url", "outboundToken"]) });
+    await until(() => far.seen.length > 0, "the new address is called");
+    expect(far.seen).toEqual([undefined]);
+
+    const given = await branch.api("PATCH", `/api/linked-servers/${callerId}`, { token: "new-token" });
+    expect(given.body.server).toMatchObject({ outbound: { hasToken: true } });
+    await until(() => far.seen.at(-1) === "Bearer new-token", "the new token reaches the new address");
+    expect(far.seen).not.toContain(`Bearer ${token}`);
+  }, 60_000);
+
+  it("sends the token to the new address when it comes in the same change", async () => {
+    const head = await server("head", [WRITER]), branch = await server("branch", [SCOUT]);
+    const { token, callerId } = await pair(branch, head, ["writer"]);
+    const far = await spy();
+    expect((await branch.api("PATCH", `/api/linked-servers/${callerId}`, { url: far.url, token: "other-token" })).body.server).toMatchObject({ outbound: { hasToken: true } });
+    await until(() => far.seen.length > 0, "the new address is called");
+    expect(far.seen).toEqual(["Bearer other-token"]);
+    expect(far.seen).not.toContain(`Bearer ${token}`);
+  }, 60_000);
+
+  it("keeps the token when only the name changes, and drops it when a record names another address at a restart", async () => {
+    const head = await server("head", [WRITER]), branch = await server("branch", [SCOUT]);
+    const { callerId } = await pair(branch, head, ["writer"]);
+    expect((await branch.api("PATCH", `/api/linked-servers/${callerId}`, { name: "Renamed" })).body.server).toMatchObject({ outbound: { hasToken: true } });
+
+    const far = await spy();
+    const path = join(branch.dataDir, "linked-servers", "a2a-peers.json");
+    const record = JSON.parse(readFileSync(path, "utf8")) as { peers: Array<Json> };
+    record.peers[0]!.url = far.url;
+    delete record.peers[0]!.endpoint;
+    writeFileSync(path, JSON.stringify(record));
+    branch.restart();
+    expect(branch.peer(callerId)).toMatchObject({ outbound: { url: far.url, hasToken: false } });
+    await until(() => far.seen.length > 0, "the address of the record is called");
+    expect(far.seen).toEqual([undefined]);
   }, 60_000);
 });
 

@@ -249,6 +249,8 @@ export function createA2aInbound(deps: A2aInboundDeps): A2aInbound {
       if ((error as { status?: unknown }).status === 413) { json(res, 413, TOO_LARGE); return null; }
       return failure(null, ERR.PARSE);
     }
+    if (!live()) { unauthorized(res); return null; }
+    if (!offered(deps.bot(botId))) { json(res, 404, NOT_FOUND); return null; }
     const parsed = parseRequest(body);
     if (!parsed.ok) return { body: parsed.error };
     const { id, method, params } = parsed.request;

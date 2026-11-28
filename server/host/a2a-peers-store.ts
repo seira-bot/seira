@@ -40,6 +40,8 @@ export function outboundUrl(raw: string, allowLoopback: boolean): URL | null {
   return url.href.length > URL_MAX ? null : url;
 }
 
+const isOrigin = (value: string): boolean => { try { return new URL(value).origin === value; } catch { return false; } };
+
 const storedUrl = z.string().max(URL_MAX).refine((value) => outboundUrl(value, true)?.href === value);
 
 export const a2aPeerSchema = z.object({
@@ -49,6 +51,8 @@ export const a2aPeerSchema = z.object({
   url: storedUrl.optional(),
   /** The peer's JSON-RPC address, as its card named it. Always on the origin of `url`. */
   endpoint: storedUrl.optional(),
+  /** The origin of `url` at the time the token this server sends was confirmed. The token goes only to that origin. */
+  tokenOrigin: z.string().max(URL_MAX).refine(isOrigin).optional(),
   /** The sha256 of the token the peer sends. Absent: the peer does not call in. */
   tokenHash: z.string().regex(/^[0-9a-f]{64}$/u).optional(),
   exposed: z.array(botIdSchema).max(500),
