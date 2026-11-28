@@ -58,7 +58,7 @@ async function side(label: string, bots: Bot[], now?: () => number, more: Partia
     resultRow: (_parent, child, name) => { results.push({ name, status: child.status, result: child.result }); },
     kick: () => { queueMicrotask(tick); },
     serverName: () => label, selfId: () => `${label}-environment`, publicOrigin: () => `http://127.0.0.1:${port}`,
-    audit: (row) => { rows.push(row); }, attemptAllowed: () => true, fetch: ask, allowLoopback: true,
+    audit: (row) => { rows.push(row); }, attemptAllowed: () => true, fetch: ask, allowLoopback: true, a2a: { allowLoopback: true },
     timing: { holdMs: 250, firstRetryMs: 20, seenMs: 5_000, pace: { gapMs: 20, freshMs: 20 } },
     ...(now ? { now } : {}), ...more,
   });

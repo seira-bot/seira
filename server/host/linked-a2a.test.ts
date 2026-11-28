@@ -16,6 +16,8 @@ import { taking } from "./linked-a2a.ts";
 import { CHAINED, LINKS_MAX, type A2aPeerView, type LinkedServerView } from "./linked-servers.ts";
 import { hashSecret } from "./linked-servers-store.ts";
 
+process.env.SEIRA_TEST_LINKED_LOOPBACK = "1";
+
 type Bot = { id: string; name: string };
 type Json = Record<string, unknown>;
 type Answer = { status: number; body: Json };
