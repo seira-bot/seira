@@ -27,6 +27,12 @@ export const SKINS: readonly Skin[] = [
   { id: "aurora", name: "Aurora", tagline: "Near-black, crossed by a band of green light. Glass on top." },
 ];
 
+/** Whether each skin is a light or a dark one. */
+export const SKIN_MODE = {
+  midnight: "dark", atelier: "light", foundry: "dark", lagoon: "light", graphite: "dark", linen: "light",
+  dusk: "dark", daylight: "light", meadow: "light", pop: "light", halloween: "dark", aurora: "dark",
+} as const satisfies Record<SkinId, "light" | "dark">;
+
 /** "system" follows the OS between the light and dark skins below; anything else pins one skin. */
 export type SkinChoice = SkinId | "system";
 export const THEME_SKINS = { light: "daylight", dark: "midnight" } as const satisfies Record<"light" | "dark", SkinId>;

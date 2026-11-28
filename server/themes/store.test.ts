@@ -25,7 +25,7 @@ describe("theme store", () => {
     const { store } = fixture();
     expect(store.save("owner", "neon", { name: "Neon", canvas: "#0b1020" })).toBeNull();
     expect(store.setActive("owner", "neon")).toBeNull();
-    expect(store.list("owner")).toEqual({ active: "neon", themes: [{ id: "neon", name: "Neon", hasCss: false, assets: [] }] });
+    expect(store.list("owner")).toEqual({ active: "neon", themes: [{ id: "neon", name: "Neon", hasCss: false, assets: [], look: { canvas: "#0b1020" } }] });
     expect(store.list("p_aaaaaaaaaaaaaaaaaaaaaa")).toEqual({ active: null, themes: [] });
     expect(store.setActive("p_aaaaaaaaaaaaaaaaaaaaaa", "neon")).toMatchObject({ refusal: expect.stringContaining("neon") });
   });
@@ -136,7 +136,7 @@ describe("theme store", () => {
     expect(store.history("owner")[0]).toMatchObject({ kind: "deleted", name: "Neon" });
     expect(store.missingAssets("owner", 1)).toEqual(["stars.png"]);
     expect(store.restore("owner", 1)).toEqual({});
-    expect(store.list("owner")).toEqual({ active: "neon", themes: [{ id: "neon", name: "Neon", hasCss: false, assets: [] }] });
+    expect(store.list("owner")).toEqual({ active: "neon", themes: [{ id: "neon", name: "Neon", hasCss: false, assets: [], look: { canvas: "#000000" } }] });
   });
 
   it("reads a theme and look changes that name a retired skin as the default look, and keeps every change", () => {
@@ -175,5 +175,29 @@ describe("startsLikeSvg", () => {
     const started = performance.now();
     expect(startsLikeSvg(`<!--${"--><!--".repeat(12_500)}`)).toBe(false);
     expect(performance.now() - started).toBeLessThan(100);
+  });
+
+  it("wears a popular theme without copying it into the person's folder, and lets a saved theme with the same id win", () => {
+    const { store, dataDir } = fixture();
+    expect(store.read("owner", "popular-nord")).toMatchObject({ name: "Nord", skin: "system" });
+    expect(store.read("owner", "popular-nope")).toBeNull();
+    expect(store.change("owner", { wear: "popular-nord" })).toEqual({});
+    expect(store.active("owner")).toBe("popular-nord");
+    expect(store.list("owner")).toEqual({ active: "popular-nord", themes: [] });
+    expect(existsSync(join(dataDir, "themes", "owner", "popular-nord"))).toBe(false);
+    expect(store.history("owner")[0]).toMatchObject({ kind: "wore", name: "Nord", file: { name: "Nord" } });
+    expect(store.save("owner", "popular-nord", { name: "My Nord", canvas: "#101010" })).toBeNull();
+    expect(store.read("owner", "popular-nord")?.name).toBe("My Nord");
+    expect(store.list("owner").themes.map((theme) => theme.id)).toEqual(["popular-nord"]);
+    store.remove("owner", "popular-nord");
+    expect(store.read("owner", "popular-nord")?.name).toBe("Nord");
+  });
+
+  it("goes back from a popular theme to the look before it", () => {
+    const { store } = fixture();
+    store.change("owner", { wear: "popular-dracula" });
+    store.change("owner", { wear: "popular-gruvbox" });
+    expect(store.restore("owner", store.history("owner")[1]!.seq)).toEqual({});
+    expect(store.active("owner")).toBe("popular-dracula");
   });
 });

@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { SKINS, SKIN_IDS, DEFAULT_SKIN_CHOICE, PRIOR_INSTALL_SKIN, THEME_SKINS, resolveSkin, readSkinChoice } from "./skins";
+import { SKINS, SKIN_IDS, SKIN_MODE, DEFAULT_SKIN_CHOICE, PRIOR_INSTALL_SKIN, THEME_SKINS, resolveSkin, readSkinChoice } from "./skins";
 import en from "@/locales/en.json";
 
 const css = readFileSync(
@@ -19,6 +19,13 @@ afterEach(() => vi.unstubAllGlobals());
 describe("skins", () => {
   it("gives every registered skin a stylesheet block", () => {
     for (const id of SKIN_IDS) expect(blocks).toContain(id);
+  });
+
+  it("names the mode of each skin as its stylesheet does", () => {
+    for (const id of SKIN_IDS) {
+      const body = css.match(new RegExp(`\\[data-skin="${id}"\\]\\s*\\{([^}]*)\\}`))?.[1] ?? "";
+      expect(SKIN_MODE[id], id).toBe(body.match(/--code-color-scheme:\s*(light|dark)/)?.[1]);
+    }
   });
 
   it("gives every skin a tagline in the catalog", () => {

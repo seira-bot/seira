@@ -76,3 +76,28 @@ it("follows the system's light or dark change while a theme with both blocks is 
     expect(appColor()).toBe(canvas);
   }
 });
+
+it("marks the window while a theme sets its own bubble colour, so the Daylight inversion stays out of it", async () => {
+  await wear({ name: "Repro", skin: "system", ...bothModes }, "daylight");
+  expect(document.documentElement.dataset.themeBubble).toBe("");
+  await wear({ name: "Plain", css: "a { color: red }" }, "daylight");
+  expect(document.documentElement.dataset.themeBubble).toBeUndefined();
+});
+
+it("puts a popular theme on at once, and moves a skin with effects back to following the computer", async () => {
+  const calls: Array<{ url: string; body: unknown }> = [];
+  vi.stubGlobal("fetch", async (url: string, init?: { body?: string }) => {
+    calls.push({ url, body: init?.body ? JSON.parse(init.body) : undefined });
+    return { ok: true, json: async () => ({ id: null, theme: null }) };
+  });
+  values.set("seira-skin", "pop");
+  const runtime = await import("./runtime");
+  expect(await runtime.wearPopularTheme("popular-dracula")).toBe(true);
+  expect(values.get("seira-skin")).toBe("system");
+  expect(calls[0]).toEqual({ url: "/api/themes/active", body: { id: "popular-dracula", skin: "system" } });
+  values.set("seira-skin", "daylight");
+  expect(await runtime.wearPopularTheme("popular-nord")).toBe(true);
+  expect(values.get("seira-skin")).toBe("daylight");
+  expect(calls.find((call) => (call.body as { id?: string } | undefined)?.id === "popular-nord")?.body).toEqual({ id: "popular-nord" });
+  expect(await runtime.wearPopularTheme("popular-nope")).toBe(false);
+});

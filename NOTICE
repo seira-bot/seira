@@ -132,3 +132,39 @@ Teams' display-name rule. Copyright 2025-2026 Vexa.ai Inc. and the Vexa
 contributors, used under the Apache License, Version 2.0
 (third_party/vexa/LICENSE). The adapted parts were rewritten in our own code;
 no Vexa file is included unmodified.
+
+The popular themes (shared/popular-themes.ts) use the published colour palettes
+of ten themes, each under the MIT License. Their text, surface and line colours
+are derived in our own code.
+
+Catppuccin (Mocha and Latte), https://github.com/catppuccin/catppuccin,
+Copyright (c) 2021 Catppuccin (third_party/catppuccin/LICENSE).
+
+Tokyo Night (Night and Day), https://github.com/enkia/tokyo-night-vscode-theme,
+Copyright (c) 2018-present Enkia (third_party/tokyo-night/LICENSE).
+
+Dracula (Dracula and Alucard), https://github.com/dracula/dracula-theme,
+Copyright (c) 2023 Dracula Theme (third_party/dracula/LICENSE).
+
+One Dark and One Light, https://github.com/atom/one-dark-syntax and
+https://github.com/atom/one-light-syntax, Copyright (c) 2016 GitHub Inc.
+(third_party/one-dark/LICENSE).
+
+Nord (Polar Night and Snow Storm), https://github.com/nordtheme/nord,
+Copyright (c) 2016-present Sven Greb (third_party/nord/LICENSE).
+
+Gruvbox (Dark and Light), https://github.com/morhetz/gruvbox, by morhetz, whose
+README and package.json state the MIT/X11 License. The repository has no licence
+file, so third_party/gruvbox/LICENSE holds the standard MIT text.
+
+Rosé Pine (Main and Dawn), https://github.com/rose-pine/rose-pine-theme,
+Copyright (c) 2023 Rosé Pine (third_party/rose-pine/LICENSE).
+
+Solarized (Dark and Light), https://github.com/altercation/solarized,
+Copyright (c) 2011 Ethan Schoonover (third_party/solarized/LICENSE).
+
+Ayu (Mirage and Light), https://github.com/ayu-theme/ayu-colors,
+Copyright (c) Konstantin Pschera (third_party/ayu/LICENSE).
+
+Night Owl and Light Owl, https://github.com/sdras/night-owl-vscode-theme,
+Copyright (c) 2018 Sarah Drasner (third_party/night-owl/LICENSE).

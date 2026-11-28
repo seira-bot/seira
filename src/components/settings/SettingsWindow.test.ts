@@ -169,7 +169,8 @@ describe("the Settings window", () => {
     expect(simple).not.toContain("Chat width");
     expect(advanced).toContain("Chat width");
     expect(simple).toContain("Light or dark");
-    expect(simple).toContain("Browse themes");
+    expect(simple).toContain("Popular");
+    expect(simple).not.toContain("Browse themes");
   });
 
   it("keeps the Advanced mode switch in the nav footer on every page, and flips it from there", () => {

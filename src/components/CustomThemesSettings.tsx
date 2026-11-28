@@ -3,10 +3,12 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type Re
 import { themeCssProblem, THEME_LIMITS, type ThemeExport, type ThemeFile, type ThemeHistoryItem, type ThemeList } from "../../shared/theme";
 import { t } from "@/lib/i18n";
 import { isMacPlatform } from "@/lib/keyboard-shortcuts";
+import { useColorScheme } from "@/lib/color-scheme";
 import { relativeTime } from "@/lib/memory";
 import { SKINS } from "@/lib/skins";
 import { chooseTheme, loadTheme, resetLook, safeLook, subscribeTheme, wornTheme } from "@/lib/theme/runtime";
 import { api } from "@/state/api";
+import { ThemePreview } from "./ThemePreview";
 import { SETTINGS_INPUT, SettingRow, SettingsEmptyRow, SettingsField, SettingsFormFoot, SettingsGroup, SettingsRows } from "./SettingsPrimitives";
 
 const put = (body: unknown) => ({ method: "PUT", body: JSON.stringify(body) });
@@ -127,6 +129,7 @@ export function CustomThemesSettings() {
   const [status, setStatus] = useState<ReactNode>(null);
   const importRef = useRef<HTMLInputElement>(null);
   const worn = useWornId();
+  const mode = useColorScheme();
   const [history, setHistory] = useState<ThemeHistoryItem[]>([]);
   const refresh = useCallback(() => Promise.all([
     api<ThemeList>("/api/themes").then(setList, (error: unknown) => setStatus(errorText(error))),
@@ -189,6 +192,7 @@ export function CustomThemesSettings() {
             ? <ThemeEditor key={theme.id} id={theme.id} act={act} onClose={() => { setEditing(null); void refresh(); }} onDelete={() => void remove(theme.id, theme.name)} />
             : (
               <SettingRow key={theme.id} title={theme.name}
+                leading={<span className="block w-14 [&>[data-skin-preview]]:h-9"><ThemePreview theme={theme.look} mode={mode} /></span>}
                 subtitle={worn === theme.id ? t("settings.customThemes.inUse") : theme.assets.length ? t("settings.customThemes.files", { count: theme.assets.length }) : undefined}>
                 <div className="flex items-center gap-1.5">
                   <button type="button" className="ui-button" onClick={() => setEditing(theme.id)}>{t("settings.customThemes.edit")}</button>
@@ -199,7 +203,7 @@ export function CustomThemesSettings() {
               </SettingRow>
             )
         ))}
-        <SettingRow title={t("settings.customThemes.reset")} subtitle={t("settings.customThemes.resetHint", { keys })}>
+        <SettingRow title={t("settings.customThemes.backToDefault")} subtitle={t("settings.customThemes.resetHint", { keys })}>
           <button type="button" className="ui-button" onClick={() => { resetLook(); void refresh(); }}>{t("settings.customThemes.reset")}</button>
         </SettingRow>
       </SettingsRows>
