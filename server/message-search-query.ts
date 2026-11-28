@@ -38,6 +38,26 @@ export function markdownToPlain(text: string): string {
     .replace(/^[ \t]*(?:#{1,6}[ \t]+|>[ \t]?|[-*+][ \t]+(?:\[[ xX]\][ \t]+)?)/gm, "");
 }
 
+// Markdown is converted only near the hit, so a huge or malformed message costs the same as a short one.
+const PLAIN_MARGIN = 250;
+const PLAIN_MAX_MATCH = 500;
+
+// The raw text around a hit, widened to whole lines when they are short: no Markdown construct crosses a line.
+// A long line is cut at whitespace instead, which never falls inside a link target.
+function plainWindow(raw: string, hit: { start: number; length: number }): { start: number; end: number } {
+  const hitEnd = hit.start + hit.length;
+  const from = Math.max(0, hit.start - PLAIN_MARGIN);
+  const to = Math.min(raw.length, hitEnd + PLAIN_MARGIN);
+  const lineStart = from === 0 ? 0 : raw.lastIndexOf("\n", from - 1) + 1;
+  const lineEnd = raw.indexOf("\n", to) < 0 ? raw.length : raw.indexOf("\n", to);
+  const space = raw.slice(from, hit.start).search(/\s/);
+  const lastSpace = raw.slice(hitEnd, to).search(/\s\S*$/);
+  return {
+    start: from - lineStart <= PLAIN_MARGIN ? lineStart : space < 0 ? hit.start : from + space,
+    end: lineEnd - to <= PLAIN_MARGIN ? lineEnd : lastSpace < 0 ? hitEnd : hitEnd + lastSpace,
+  };
+}
+
 export function searchMessagesInDatabase(database: DatabaseSync, query: string, limit = 40, threadId?: string): SearchHit[] {
   const needle = query.trim().toLowerCase();
   if (!needle) return [];
@@ -65,16 +85,25 @@ export function searchMessagesInDatabase(database: DatabaseSync, query: string, 
   }>;
   return rows.map((row) => {
     const raw = row.kind === "activity" ? (row.tool_name ?? "") : (row.text ?? "");
-    const plain = row.kind === "activity" ? raw : markdownToPlain(raw);
-    // A query that names Markdown itself ("**bold") still finds its place in the raw text.
-    const plainHit = matchSpan(plain, needle);
-    const haystack = plainHit ? plain : raw;
-    const hit = plainHit ?? matchSpan(raw, needle) ?? { start: 0, length: 0 };
+    const rawHit = matchSpan(raw, needle) ?? { start: 0, length: 0 };
+    let haystack = raw, hit = rawHit, cutBefore = false, cutAfter = false;
+    if (row.kind !== "activity" && rawHit.length <= PLAIN_MAX_MATCH) {
+      const window = plainWindow(raw, rawHit);
+      const plain = markdownToPlain(raw.slice(window.start, window.end));
+      // A query that names Markdown itself ("**bold") still finds its place in the raw text.
+      const plainHit = matchSpan(plain, needle);
+      if (plainHit) {
+        haystack = plain;
+        hit = plainHit;
+        cutBefore = window.start > 0;
+        cutAfter = window.end < raw.length;
+      }
+    }
     const start = Math.max(0, hit.start - 60);
     const end = Math.min(haystack.length, hit.start + hit.length + 90);
-    const head = start > 0 ? "…" : "";
+    const head = start > 0 || cutBefore ? "…" : "";
     const body = haystack.slice(start, end).replace(/\s+/g, " ").trim();
-    const snippet = head + body + (end < haystack.length ? "…" : "");
+    const snippet = head + body + (end < haystack.length || cutAfter ? "…" : "");
     const folded = needle.replace(/\s+/g, " ");
     const match = matchSpan(snippet, folded);
     return {
