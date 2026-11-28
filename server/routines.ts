@@ -80,7 +80,7 @@ export interface Routine extends RoutineTroubleCode {
   deliver?: RoutineDelivery;
   checkedAt?: number;
   checkTrouble?: string;
-  wakeAt?: number;
+  wakeAt?: number; notBefore?: number;
   skippedRuns?: number;
   lastSkippedAt?: number; skippedOccurrences?: number[];
   failureStreak?: number;
@@ -951,13 +951,13 @@ export class RoutineManager {
     return held!.paused.length ? held!.began : [];
   }
 
-  deferNextRun(id: string, until: number): Routine | null {
+  deferNextRun(id: string, until: number, notBefore = until): Routine | null {
     const routine = this.routines.find((candidate) => candidate.id === id);
     if (!routine) return null;
     if (!routine.enabled || routine.nextRunAt === null || routine.nextRunAt >= until || routine.schedule.type === "limit_reset") return this.routineWithHealth(routine);
     this.commitMutation(() => {
       if (routine.schedule.type === "once") routine.schedule = { type: "once", at: until };
-      routine.nextRunAt = until;
+      routine.nextRunAt = until; routine.notBefore = notBefore;
     });
     this.emitRoutine(routine);
     return this.routineWithHealth(routine);

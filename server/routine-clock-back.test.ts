@@ -79,6 +79,26 @@ describe("a clock that goes back after it ran ahead", () => {
     expect(next()).toBe(until);
   });
 
+  it("keeps a run put after a limit reset when the clock is set back by more than the limit", async () => {
+    const { manager, id, next } = started({ type: "cron", expression: "* * * * *", timeZone: "UTC" });
+    const until = Date.now() + 3 * 60 * MINUTE;
+    manager.deferNextRun(id, until);
+    vi.setSystemTime(Date.now() - 10 * MINUTE); // a clock that was ten minutes fast is set right
+    await vi.advanceTimersByTimeAsync(MINUTE);
+    expect(next()).toBe(until);
+  });
+
+  it("still follows a clock set right when the run was put after a reset by the fast clock", async () => {
+    const { manager, id, next } = started({ type: "cron", expression: "* * * * *", timeZone: "UTC" });
+    const reset = START + 2 * 60 * MINUTE;
+    vi.setSystemTime(START + 30 * DAY); // the fast clock: its now is past the reset, so the run waits for that now
+    await vi.advanceTimersByTimeAsync(10_000);
+    manager.deferNextRun(id, Date.now() + 60 * MINUTE, reset);
+    vi.setSystemTime(START);
+    await vi.advanceTimersByTimeAsync(MINUTE);
+    expect(next()).toBe(reset);
+  });
+
   it("keeps the instant of a one-time run", async () => {
     const at = START + 10 * DAY;
     const { next } = started({ type: "once", at });
