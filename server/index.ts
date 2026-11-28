@@ -601,7 +601,7 @@ import { appSettingDecisionText, createAppSettings } from "./app-settings/host.t
 import { routeBackedRegistry } from "./app-settings/registry.ts";
 import { createTrustAnswers } from "./host/trust-answers.ts";
 import { createInternalThreadRoutes } from "./routes/internal-threads.ts";
-import { createTodosRuntime } from "./todo-runner.ts"; import type { TodoPerson, TodoRecord } from "./todos.ts"; import type { BotAccessLevel } from "../shared/bot-access.ts"; import { ownerMayHand } from "./host/personal-reach.ts"; import { TodoError, type TodoRoutines } from "./host/todos-host.ts"; import { createTodoRoutes } from "./routes/todos.ts"; import { createInternalTodoRoutes } from "./routes/internal-todos.ts";
+import { createTodosRuntime } from "./todo-runner.ts"; import type { TodoPerson, TodoRecord } from "./todos.ts"; import type { BotAccessLevel } from "../shared/bot-access.ts"; import { ownerMayHand } from "./host/personal-reach.ts"; import { defaultBotPerson } from "../shared/default-bot.ts"; import { TodoError, type TodoRoutines } from "./host/todos-host.ts"; import { createTodoRoutes } from "./routes/todos.ts"; import { createInternalTodoRoutes } from "./routes/internal-todos.ts";
 import { PendingSuggestedReplies, personStartedTurn } from "./suggested-replies-pending.ts";
 import { offerTaskSuggestions, TaskSuggestionTurns } from "./task-suggestions.ts"; import { createTaskSuggestionRoutes } from "./routes/task-suggestions.ts";
 import { createBrowserEvidenceRoutes } from "./routes/browser-evidence.ts";
@@ -12930,7 +12930,10 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
       }
       if (await dispatchRoutes([createInternalTodoRoutes({ host: todosRuntime.host, from: internalSender, fromThreadId: internalCapability.threadId,
         // A todo from work that came in from outside is outside work too, as a routine it proposes is (writer CLOUD_OUTSIDE_KEY).
-        person: () => ({ key: CLOUD_HOME && (outsideDrivenThread(internalCapability.threadId) || outsideWorkStaysHere(internalCapability.threadId)) ? CLOUD_OUTSIDE_KEY : openerFrom(internalCapability.threadId) }),
+        person: () => {
+          const owner = CLOUD_TEAM && internalSender ? defaultBotPerson(internalSender) : "";
+          return { key: CLOUD_HOME && (outsideDrivenThread(internalCapability.threadId) || outsideWorkStaysHere(internalCapability.threadId)) ? CLOUD_OUTSIDE_KEY : openerFrom(internalCapability.threadId), ...(owner ? { viewer: { kind: "member" as const, email: owner } } : {}) };
+        },
         readBody: readInternalBody, readable: (todo) => CLOUD_TEAM === null || (mayRead(todosRuntime.host.audienceOf(todo), teamHost.audienceOf(internalCapability.threadId)) && [todo.threadId, todo.source?.threadId].every((id) => id === undefined || teamHost.readableFrom(internalCapability.threadId)(id))), botName: todosRuntime.botName, postLine: (threadId, text, todoIds) => { store.appendMessage(threadId, { role: "bot", kind: "text", text, todoBatch: { todoIds } }); } })], { req, res, url, path, method, auth, json, readBody })) return;
       if (await dispatchRoutes([createInternalThreadRoutes({
         store, coordinator, from: internalSender, fromThreadId: internalCapability.threadId,

@@ -152,7 +152,9 @@ export function createTodosHost(deps: TodosHostDeps) {
   /** Security invariant: a person's todo goes only to a bot that person may chat with, whoever hands it on (the picker,
    * another bot, or someone else on the Board). Otherwise their words would reach a bot they may not give work to. */
   function personMayGive(todo: Pick<TodoRecord, "madeBy" | "person">, botId: string): boolean {
-    return todo.madeBy.kind !== "person" || atLeast(deps.levelFor(todo.person, botId), "chat");
+    // A todo a bot made works for a person only when one was recorded (a personal Seira's owner). Then the final bot
+    // must be one that person may chat with, at every step: add, hand over, Board change, picker and start.
+    return (todo.madeBy.kind !== "person" && !todo.person?.viewer?.email) || atLeast(deps.levelFor(todo.person, botId), "chat");
   }
 
   function depthFor(threadId: string): number {

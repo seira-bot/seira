@@ -441,3 +441,36 @@ describe("security: a person's todo reaches only bots that person may chat with"
     expect(host.botAssign({ botId: "atlas", threadId: "t" }, { todoId: todo.id, assigneeBotId: "scout", reason: "r" }).botId).toBe("scout");
   });
 });
+
+describe("security: a todo of a personal Seira keeps its person's reach at every step", () => {
+  const owner: TodoPerson = { key: "p_mira", viewer: { kind: "member", email: "mira@acme.test" } };
+  const levels = (botId: string): BotAccessLevel => (botId === "scout" ? "view" : "chat");
+  const world = () => setup({ levelFor: (who, botId) => (who?.viewer?.email ? levels(botId) : "chat") });
+
+  it("refuses the bot it is first given to when its person may not chat with it", () => {
+    const { host, store } = world();
+    expect(() => host.botAdd({ botId: "atlas", threadId: "t" }, [{ title: "Read payroll", assigneeBotId: "scout" }], owner)).toThrow(TodoError);
+    expect(store.live()).toHaveLength(0);
+  });
+
+  it("refuses a later hand-over by a team bot to a bot its person may not chat with, and keeps the todo where it is", () => {
+    const { host, store } = world();
+    const todo = host.botAdd({ botId: "atlas", threadId: "t" }, [{ title: "Follow up", assigneeBotId: "chief" }], owner).todos[0]!;
+    expect(() => host.botAssign({ botId: "chief", threadId: "t" }, { todoId: todo.id, assigneeBotId: "scout", reason: "fits" })).toThrow("cannot give work to Scout");
+    expect(store.get(todo.id)!.botId).toBe("chief");
+  });
+
+  it("refuses the same final bot from the Board, the picker and a start", () => {
+    const { host, store } = world();
+    const todo = host.botAdd({ botId: "atlas", threadId: "t" }, [{ title: "Follow up", assigneeBotId: "chief" }], owner).todos[0]!;
+    expect(() => host.patch(todo.id, { botId: "scout" }, person)).toThrow(TodoError);
+    expect(host.personMayGive(store.get(todo.id)!, "scout")).toBe(false);
+    expect(host.personMayGive(store.get(todo.id)!, "atlas")).toBe(true);
+  });
+
+  it("leaves a bot-made todo with no recorded owner to the bots' own reach rules", () => {
+    const { host } = world();
+    const todo = host.botAdd({ botId: "atlas", threadId: "t" }, [{ title: "Follow up", assigneeBotId: "chief" }], { key: "p_pat" }).todos[0]!;
+    expect(host.botAssign({ botId: "chief", threadId: "t" }, { todoId: todo.id, assigneeBotId: "scout", reason: "fits" }).botId).toBe("scout");
+  });
+});
