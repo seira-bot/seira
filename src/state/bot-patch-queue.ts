@@ -42,6 +42,7 @@ export type BotUpdatePatch = Partial<
     | "section"
     | "pinnedMessageId"
     | "chiefOfStaff"
+    | "startsTodos"
     | "composio"
     | "browser"
     | "browserProfile"

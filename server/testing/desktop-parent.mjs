@@ -5,12 +5,18 @@
 // SEIRA_TEST_DESKTOP_TAILNET_SHARE: the share on the tailnet the app asks its server for, as JSON.
 // SEIRA_TEST_DESKTOP_CUA_CONNECTION: a file holding the app's driver record; the app hands it to its own server, and again
 // each time the file changes, as the real app does each time its driver changes.
-import { readFileSync, unwatchFile, watchFile } from "node:fs";
+// SEIRA_TEST_DESKTOP_INBOX: a file the test appends one JSON message per line to; the port hands each new line to the server as
+// the app would. SEIRA_TEST_DESKTOP_OUTBOX: a file the port appends each message the server sends to the app to, one JSON line each.
+import { appendFileSync, readFileSync, unwatchFile, watchFile } from "node:fs";
 
 const token = process.env.SEIRA_TEST_DESKTOP_OWNER_TOKEN;
 const pages = process.env.SEIRA_TEST_DESKTOP_PAGES_ACCESS;
 const cuaFile = process.env.SEIRA_TEST_DESKTOP_CUA_CONNECTION;
 const tailnetShare = process.env.SEIRA_TEST_DESKTOP_TAILNET_SHARE;
+const inbox = process.env.SEIRA_TEST_DESKTOP_INBOX;
+const outbox = process.env.SEIRA_TEST_DESKTOP_OUTBOX;
+delete process.env.SEIRA_TEST_DESKTOP_INBOX;
+delete process.env.SEIRA_TEST_DESKTOP_OUTBOX;
 delete process.env.SEIRA_TEST_DESKTOP_TAILNET_SHARE;
 delete process.env.SEIRA_TEST_DESKTOP_OWNER_TOKEN;
 delete process.env.SEIRA_TEST_DESKTOP_PAGES_ACCESS;
@@ -24,7 +30,7 @@ const cuaGrant = () => {
   return { type: "seira:local-computer", connection };
 };
 
-if (token || cuaFile) {
+if (token || cuaFile || inbox) {
   const listeners = [];
   if (cuaFile) {
     watchFile(cuaFile, { interval: 25, persistent: false }, () => {
@@ -32,6 +38,16 @@ if (token || cuaFile) {
       for (const listener of listeners) listener({ data: grant });
     });
     process.once("exit", () => unwatchFile(cuaFile));
+  }
+  if (inbox) {
+    let handled = 0;
+    watchFile(inbox, { interval: 25, persistent: false }, () => {
+      let lines = [];
+      try { lines = readFileSync(inbox, "utf8").split("\n").filter(Boolean); } catch {}
+      for (const line of lines.slice(handled)) for (const listener of listeners) listener({ data: JSON.parse(line) });
+      handled = lines.length;
+    });
+    process.once("exit", () => unwatchFile(inbox));
   }
   Object.defineProperty(process, "parentPort", {
     value: {
@@ -43,7 +59,7 @@ if (token || cuaFile) {
         if (cuaFile) queueMicrotask(() => listener({ data: cuaGrant() }));
         if (tailnetShare) queueMicrotask(() => listener({ data: { type: "seira:tailnet-share", share: JSON.parse(tailnetShare) } }));
       },
-      postMessage() {},
+      postMessage(message) { if (outbox) appendFileSync(outbox, `${JSON.stringify(message)}\n`); },
     },
   });
 }

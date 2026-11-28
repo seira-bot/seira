@@ -15,5 +15,6 @@ export function cloneRun(run: RoutineRun): RoutineRun {
     ...run,
     attachments: cloneAttachments(run.attachments),
     denials: run.denials ? [...run.denials] : undefined,
+    ...(run.stepThreads ? { stepThreads: structuredClone(run.stepThreads) } : {}),
   };
 }

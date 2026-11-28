@@ -3,8 +3,8 @@
 Apps shows a GitHub tile that connects through the Seira GitHub App. A bot can
 use only the repositories its owner gives it, at the level the owner picks:
 Read, Pull requests or Write. Only the person who connected GitHub can change
-a bot's limits. Everyone else sees them read-only. The feature is off unless
-`SEIRA_GITHUB_APP=1` or `features.githubApp` is set.
+a bot's limits. Everyone else sees them read-only. The connection is on unless
+`SEIRA_GITHUB_APP=0` or `features.githubApp: false` is set.
 
 ## Isolated browser verification
 
@@ -22,9 +22,11 @@ server has its own temporary data folder. It drives the real Apps pop-up and
 bot panel, and checks:
 
 - With no connection, the GitHub tile is in Featured with a Connect button
-  and a Bot access section.
-- As the owner, the tile lists both accounts, a pending organization request
-  and the bots that use GitHub. The Which bots dialog has one switch per bot.
+  and no Manage section.
+- As the owner, the connected tile stays in Featured and shows one accounts
+  summary, a pending organization request and the bots that use GitHub. One
+  Manage section holds the account rows, Disconnect, Add account and the
+  access note. The Which bots dialog has one switch per bot.
 - The bot's Apps page shows a Repositories row. The bot GitHub page lists
   each repository with its level and the two rules.
 - Changing a level on the level page is stored: `GET /api/github-app` shows

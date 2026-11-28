@@ -6,6 +6,7 @@ import * as tts from "../tts/index.ts";
 import type { WebhookManagerOptions } from "../webhooks.ts";
 import type { RoomTalksVerdict } from "./room-access.ts";
 import { postWebhookToRoom } from "./webhook-room-post.ts";
+import { PublicError } from "../public-error.ts";
 
 export interface WebhookRoomDeps {
   store: Store;
@@ -15,7 +16,7 @@ export interface WebhookRoomDeps {
 }
 
 function fail(status: number, message: string): never {
-  throw Object.assign(new Error(message), { status });
+  throw new PublicError(message, status);
 }
 
 /** A webhook's owner configures it from the dashboard, so refusals name the webhook's bot and room rather than speaking as it. */

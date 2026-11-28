@@ -65,6 +65,7 @@ describe("hosted MCP apps", () => {
       ["dalekta", "https://mcp.dalekta.id/mcp"],
       ["grupy", "https://mcp.grupy.chat/mcp"],
       ["wapilot", "https://integrator.wapilot.id/v1/mcp"],
+      ["tebar", "https://api.tebar.app/mcp"],
     ]);
     const ids: string[] = HOSTED_MCP_APPS.map((app) => app.id);
     for (const old of ["whop", "agentcard", "agentmail", "vapi", "telnyx", "agentphone", "bubblav"]) expect(ids).not.toContain(old);

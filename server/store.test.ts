@@ -21,6 +21,7 @@ import * as mdb from "./message-db.ts";
 import { hasTeamAuthority } from "./peer-roster.ts";
 import { flushLaterSaves } from "./save-batch.ts";
 import { Store, toWireTask, type BotRecord } from "./store.ts";
+import { UnreadableBotsError } from "./unreadable-bots.ts";
 import { STARTER_CHARACTERS } from "./bot-look.ts";
 import type { TeamSetupRequest } from "../shared/team-setup.ts";
 import { DEFAULT_APPROVAL_MODE, approvalModeFor, setDefaultApprovalMode } from "../shared/approval-mode.ts";
@@ -190,14 +191,13 @@ describe("Store", () => {
   it("never empties rooms when the bot list cannot be read", () => {
     const store = new Store(selection);
     const [ada, cleo] = [store.createBot({}), store.createBot({})];
-    const room = store.createGroup("Launch team", [ada.id, cleo.id], false);
+    store.createGroup("Launch team", [ada.id, cleo.id], false);
     const groupsFile = join(DATA_DIR, "groups.json");
     const before = readFileSync(groupsFile, "utf8");
     writeFileSync(join(DATA_DIR, "bots.json"), "{ not json");
 
-    expect(new Store(selection).group(room.id)?.memberIds).toEqual([ada.id, cleo.id]);
-    expect(JSON.parse(readFileSync(groupsFile, "utf8")).find((g: { id: string }) => g.id === room.id).memberIds)
-      .toEqual(JSON.parse(before).find((g: { id: string }) => g.id === room.id).memberIds);
+    expect(() => new Store(selection)).toThrow(UnreadableBotsError);
+    expect(readFileSync(groupsFile, "utf8")).toBe(before);
   });
 
   it("a stand-in is read-only: no write method finds it, so naming one changes nothing of this place's own", () => {
@@ -1806,13 +1806,13 @@ describe("Store", () => {
     expect(reloaded.activePath(bot.threadId).map((m) => m.text)).not.toContain("v1");
   });
 
-  it("tolerates a corrupt bots.json by starting empty", () => {
+  it("refuses a corrupt bots.json and leaves it as it is", () => {
     const store = new Store(selection);
     store.createBot();
     writeFileSync(join(DATA_DIR, "bots.json"), "{not json");
 
-    const reloaded = new Store(selection);
-    expect(reloaded.bots).toEqual([]);
+    expect(() => new Store(selection)).toThrow(UnreadableBotsError);
+    expect(readFileSync(join(DATA_DIR, "bots.json"), "utf8")).toBe("{not json");
   });
 
   it("busy is wiped even when bots.json says otherwise", () => {

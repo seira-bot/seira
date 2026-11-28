@@ -9,7 +9,7 @@ import { PASS, type RouteContext } from "./table.ts";
 
 const NOW = 1_800_000_000_000;
 
-function setup(hidden: { threads?: string[]; bots?: string[] } = {}, options: { level?: string; more?: ReturnType<BoardSources["handoffs"]> } = {}) {
+function setup(hidden: { threads?: string[]; bots?: string[] } = {}, options: { level?: string; more?: ReturnType<BoardSources["handoffs"]>; todos?: unknown[]; todoRefusal?: (todoId: string) => string | null; closeTodo?: (todoId: string) => void } = {}) {
   const closed = new Map<string, BoardClosure>();
   const closures: BoardClosures = {
     get: (id) => closed.get(id),
@@ -27,6 +27,7 @@ function setup(hidden: { threads?: string[]; bots?: string[] } = {}, options: { 
       { id: "r2", routineId: "rt", routineName: "Secret digest", botId: "ghost", status: "queued", scheduledFor: NOW - 10 },
       { id: "r3", routineId: "rt", routineName: "Digest", botId: "atlas", status: "running", threadId: "t-secret", scheduledFor: NOW - 10 },
     ],
+    ...(options.todos ? { todos: () => ({ todos: options.todos as never, picker: null }) } : {}),
   };
   const visible = {
     everything: false,
@@ -35,9 +36,12 @@ function setup(hidden: { threads?: string[]; bots?: string[] } = {}, options: { 
     routineShown: () => true,
     bot: (id: string) => !(hidden.bots ?? []).includes(id),
     group: () => true,
+    shows: () => true,
     level: (id: string) => ((hidden.bots ?? []).includes(id) ? "none" : options.level ?? "chat"),
   } as unknown as VisibleSet;
-  const route = createBoardRoutes({ sources: () => sources, visibleFor: () => visible, closures, closerName: () => "Rama", now: () => NOW });
+  const route = createBoardRoutes({ sources: () => sources, visibleFor: () => visible, closures, closerName: () => "Rama", now: () => NOW,
+    ...(options.closeTodo ? { closeTodo: (todoId: string) => options.closeTodo!(todoId) } : {}),
+    ...(options.todoRefusal ? { todoRefusal: (_auth: RequestAuth, todoId: string) => options.todoRefusal!(todoId) } : {}) });
   const call = async (method: string, path: string, body: unknown = {}) => {
     const sent: { status?: number; body?: any } = {};
     const out = await route({
@@ -109,6 +113,17 @@ describe("POST /api/board/close", () => {
     expect(await close(call, "handoff:h3")).toMatchObject({ status: 200 });
     expect(await close(call, "handoff:h3")).toMatchObject({ status: 409 });
     expect([...closed.keys()]).toEqual(["handoff:h3"]);
+  });
+
+  it("refuses to close a todo card that the person may not change, and leaves the todo alone", async () => {
+    const todo = { id: "t1", title: "Plan", status: "needs-you", start: { kind: "free" }, rank: 1, madeBy: { kind: "person", name: "R" }, botId: "atlas", attempts: 1, depth: 0, createdAt: NOW - 1000, updatedAt: NOW - 1000 };
+    const closedTodos: string[] = [];
+    const { call } = setup({}, { todos: [todo], todoRefusal: () => "a todo someone else wrote", closeTodo: (id) => { closedTodos.push(id); } });
+    expect(await close(call, "todo:t1")).toMatchObject({ status: 403, body: { error: "a todo someone else wrote" } });
+    expect(closedTodos).toEqual([]);
+    const open = setup({}, { todos: [todo], todoRefusal: () => null, closeTodo: (id) => { closedTodos.push(id); } });
+    expect(await close(open.call, "todo:t1")).toMatchObject({ status: 200 });
+    expect(closedTodos).toEqual(["t1"]);
   });
 
   it("refuses a body without a card id or with a reason that is too long", async () => {

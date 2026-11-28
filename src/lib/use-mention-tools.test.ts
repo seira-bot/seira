@@ -14,6 +14,7 @@ vi.mock("@/components/bot-settings/useBotApps", async (importOriginal) => ({
   loadAppCards: fixture.cards,
 }));
 
+import { resetGithubApp } from "./github-app";
 import { mentionToolChoices, useMentionTools } from "./use-mention-tools";
 
 const app = (slug: string, label: string, scope: BotApp["scope"] = "write"): BotApp => ({ slug, label, blurb: "", card: { logo: null, domain: null, label }, scope });
@@ -32,6 +33,14 @@ describe("mentionToolChoices", () => {
   });
 });
 
+describe("mentionToolChoices and GitHub", () => {
+  it("keeps only the native GitHub row when Composio GitHub is usable too (AC-05)", () => {
+    const rows = mentionToolChoices([app("github", "Github"), app("github_app", "GitHub")], []);
+    expect(rows.map((row) => row.tool?.slug)).toEqual(["github_app"]);
+    expect(mentionToolChoices([app("github", "Github")], []).map((row) => row.tool?.slug)).toEqual(["github"]);
+  });
+});
+
 describe("useMentionTools", () => {
   let root: Root;
   let container: HTMLDivElement;
@@ -42,6 +51,7 @@ describe("useMentionTools", () => {
 
   beforeEach(() => {
     latest = [];
+    resetGithubApp();
     container = document.createElement("div");
     root = createRoot(container);
     fixture.cards.mockResolvedValue(new Map());
@@ -71,5 +81,33 @@ describe("useMentionTools", () => {
     flushSync(() => root.render(createElement(Probe, { active: true })));
     await settle();
     expect(latest).toEqual([]);
+  });
+
+  it("lists one GitHub row for a bot that may use the connected GitHub (AC-05)", async () => {
+    fixture.apps.mockResolvedValue({ services: {}, authoritative: true });
+    fixture.api.mockImplementation(async (path: string) => {
+      if (path === "/api/email") return { state: "off" };
+      if (path === "/api/github-app") return { enabled: true, connected: true, accounts: [], pending: [], bots: { scout: { repos: [], askBeforeBigChanges: true, ownBranchesOnly: true } } };
+      return { servers: [] };
+    });
+    const github = { id: "scout", composio: undefined, connectorScopes: { apps: { github_app: "write" as const } }, connectorTools: undefined };
+    const Github = () => { latest = useMentionTools(github, true); return null; };
+    flushSync(() => root.render(createElement(Github)));
+    await settle();
+    expect(latest.map((row) => row.name)).toEqual(["GitHub"]);
+  });
+
+  it("keeps the GitHub row when the Composio app list cannot be read (AC-05)", async () => {
+    fixture.apps.mockResolvedValue({ services: { gmail: { connected: true } }, authoritative: false });
+    fixture.api.mockImplementation(async (path: string) => {
+      if (path === "/api/email") return { state: "off" };
+      if (path === "/api/github-app") return { enabled: true, connected: true, accounts: [], pending: [], bots: { scout: { repos: [], askBeforeBigChanges: true, ownBranchesOnly: true } } };
+      return { servers: [] };
+    });
+    const github = { id: "scout", composio: undefined, connectorScopes: undefined, connectorTools: undefined };
+    const Github = () => { latest = useMentionTools(github, true); return null; };
+    flushSync(() => root.render(createElement(Github)));
+    await settle();
+    expect(latest.map((row) => row.name)).toEqual(["GitHub"]);
   });
 });

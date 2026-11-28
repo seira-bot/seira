@@ -175,6 +175,7 @@ describe("VisibleSet", () => {
     expect(pathSubject("/api/groups/room-mixed/read")).toEqual({ kind: "group", id: "room-mixed" });
     expect(pathSubject("/api/groups/order"), "the room order is not a room").toBeNull();
     expect(pathSubject("/api/routines/r1/run")).toEqual({ kind: "routine", id: "r1" });
+    expect(pathSubject("/api/routines/r1/skip")).toEqual({ kind: "routine", id: "r1" });
     expect(pathSubject("/api/routines/wake")).toBeNull();
     expect(pathSubject("/api/routine-runs/run1/seen")).toEqual({ kind: "routine-run", id: "run1" });
     expect(pathSubject("/api/routine-runs/seen-all")).toBeNull();

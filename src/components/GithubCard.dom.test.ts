@@ -72,11 +72,23 @@ describe("the GitHub tile in Apps", () => {
     fixture.api.mockResolvedValue(status());
     const onChange = vi.fn();
     await render(createElement(GithubCard, { onChange }));
-    expect(text()).toContain("Add account");
-    expect(text()).toContain("Connected by you");
-    expect(text()).toContain("acme");
-    expect(text()).toContain("Disconnect");
+    expect(host.querySelector("[data-github-summary]")?.textContent).toBe("acme · 1 repository");
     expect(host.querySelector("[data-app-bots=github_app]")?.textContent).toContain("Change");
+    expect(text()).not.toContain("Connected by you");
+    const manage = host.querySelector("details[data-github-manage]")!;
+    expect(manage.querySelector("summary")?.textContent).toBe("Manage");
+    expect(manage.textContent).toContain("Add account");
+    expect(manage.querySelector("[data-github-account=acme]")?.textContent).toContain("Disconnect");
+    expect(host.querySelectorAll("details")).toHaveLength(1);
+    const header = host.querySelector("[data-app-tile=github] > div")!;
+    expect(header.textContent).not.toContain("Add account");
+  });
+
+  it("joins the logins and adds the repositories of several accounts", async () => {
+    const [first] = status().accounts;
+    fixture.api.mockResolvedValue(status({ accounts: [first!, { ...first!, installationId: 2, login: "beta", repositories: [...first!.repositories, { ...first!.repositories[0]!, id: 8 }] }] }));
+    await render(createElement(GithubCard, { onChange: () => {} }));
+    expect(host.querySelector("[data-github-summary]")?.textContent).toBe("acme, beta · 3 repositories");
   });
 
   it("is read-only for a person who did not connect it", async () => {
@@ -84,7 +96,6 @@ describe("the GitHub tile in Apps", () => {
     await render(createElement(GithubCard, { onChange: () => {} }));
     expect(text()).not.toContain("Add account");
     expect(text()).not.toContain("Disconnect");
-    expect(text()).not.toContain("Connected by you");
     expect(host.querySelector("[data-github-readonly]")?.textContent).toContain("Rama");
     expect(host.querySelector("[data-app-bots=github_app]")?.textContent).toContain("View");
   });

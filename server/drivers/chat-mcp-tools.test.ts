@@ -1561,6 +1561,14 @@ describe("Chat MCP servers starting in the background", () => {
     expect(await session.join()).toBeUndefined();
   });
 
+  it("lists a server that starts quickly from the first request", async () => {
+    const agents = fixture();
+    const quick = fixture(slowStart(50));
+    const session = await background({ agents: agents.server, custom: { quick: quick.server } }, agents.controller.signal);
+    expect(names(session)).toEqual(["agents_write", "quick_write"]);
+    expect(await session.join()).toBeUndefined();
+  });
+
   it("says when a server that was still starting is skipped", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const agents = fixture();

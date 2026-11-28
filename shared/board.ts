@@ -5,26 +5,37 @@
 export type BoardColumn = "todo" | "working" | "needs-you" | "done";
 
 /** handoff: one bot handed work to another. thread: a conversation a bot is working in.
- * routine: one run of an automation. */
-export type BoardCardKind = "handoff" | "thread" | "routine";
+ * routine: one run of an automation. todo: a todo (shared/todo.ts). */
+export type BoardCardKind = "handoff" | "thread" | "routine" | "todo";
 
 /** queued: waits for its bot. running: its bot works on it. waiting-teammate: it waits on another bot.
  * needs-input: its bot asked the person a question. waiting-on-you: a conversation waits on the person.
  * failed: it ran into a problem. completed: it finished. closed: the bot closed the conversation, or a person or a bot
- * moved the card to Done. */
+ * moved the card to Done. open: a todo waits for the bot picker. scheduled: a todo waits for its time or for another
+ * todo. unassigned: a todo has no bot and nobody will pick one. */
 export type BoardCardState =
-  | "queued" | "running" | "waiting-teammate" | "needs-input" | "waiting-on-you" | "failed" | "completed" | "closed";
+  | "queued" | "running" | "waiting-teammate" | "needs-input" | "waiting-on-you" | "failed" | "completed" | "closed"
+  | "open" | "scheduled" | "unassigned";
+
+/** Where a To do card sits: Open (no bot yet), Up next, or Scheduled. */
+export type BoardTodoGroup = "open" | "next" | "scheduled";
 
 export interface BoardCard {
-  /** Stable across reads: `handoff:<assignment id>`, `thread:<thread id>` or `routine:<run id>`. */
+  /** Stable across reads: `handoff:<assignment id>`, `thread:<thread id>`, `routine:<run id>` or `todo:<todo id>`. */
   id: string;
   kind: BoardCardKind;
   column: BoardColumn;
   state: BoardCardState;
   /** Plain text, at most BOARD_TITLE_CHARS. Empty when the conversation has no title yet. */
   title: string;
-  /** The bot that does the work. */
+  /** The bot that does the work. Empty for an open todo. */
   botId: string;
+  /** The todo's id, for a todo card; the full todo comes from GET /api/todos. */
+  todoId?: string;
+  /** Set on every To do card. */
+  group?: BoardTodoGroup;
+  /** 1-based place in the bot's Up next, for a todo in the "next" group. */
+  place?: number;
   /** The conversation to open; absent for a routine run that never reached one. */
   threadId?: string;
   /** Set when the work happens in a group chat. */

@@ -3,13 +3,18 @@ import { api, useStore, type ConfigStatus, type ModelSelection } from "@/state/s
 import { t } from "@/lib/i18n";
 import { cn } from "@/lib/cn";
 import { AI_POOL_MODES, AI_POOL_RESERVES, type AiPoolMode } from "../../shared/ai-pool";
-import { AI_POOL_STEP_CHOICES, levelsFor, MODE_LABEL_KEY, nextPoolMember, stepsOf, suggestPoolMembers, type AiPool, type PoolSteps } from "@/lib/ai-pool";
+import { AI_POOL_STEP_CHOICES, levelsFor, MODE_LABEL_KEY, isPaidMember, memberBilling, nextPoolMember, stepsOf, suggestPaidMembers, suggestPoolMembers, type AiPool, type PoolSteps } from "@/lib/ai-pool";
 import { useEngineLimits } from "@/lib/limit-resets";
 import { SettingRow, SettingsFoldRow, SettingsRows, Switch } from "./SettingsPrimitives";
 import { Select } from "./Select";
-import { AddRows, MemberRows } from "./AiPoolMembers";
+import { AddRows, MemberRows, textButton } from "./AiPoolMembers";
 
 const MODE_LINE_KEY = { even: "settings.aiPool.modeEvenLine", turns: "settings.aiPool.modeTurnsLine", inOrder: "settings.aiPool.modeInOrderLine" } as const satisfies Record<AiPoolMode, string>;
+
+const PAID_LINE_KEY = { even: "settings.aiPool.paidModeEven", turns: "settings.aiPool.paidModeTurns", inOrder: "settings.aiPool.paidModeInOrder" } as const satisfies Record<AiPoolMode, string>;
+
+/** Members the pool would use, split by how they bill. Nothing here is saved until the owner picks. */
+interface PaidReview { plans: ModelSelection[]; paid: ModelSelection[]; unknown: ModelSelection[]; all: ModelSelection[] }
 
 function ModeChoice({ mode, disabled, onChange }: { mode: AiPoolMode; disabled: boolean; onChange: (mode: AiPoolMode) => void }) {
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
@@ -58,6 +63,7 @@ export function AiPoolSettings() {
   const [notice, setNotice] = useState("");
   const [needsSecond, setNeedsSecond] = useState(false);
   const [foldOpen, setFoldOpen] = useState(false);
+  const [review, setReview] = useState<PaidReview | null>(null);
   const inFlight = useRef(false);
   const saved = state.config?.aiPool;
   const value: AiPool = draft ?? saved ?? { enabled: false, mode: "even", members: [] };
@@ -94,14 +100,48 @@ export function AiPoolSettings() {
     setDraft(pool);
     setNotice("");
     setNeedsSecond(false);
+    setReview(null);
     void save(pool);
+  };
+  const nameOf = (members: readonly ModelSelection[]) => members.map((member) => state.instances.find((instance) => instance.instanceId === member.instanceId)?.displayName ?? member.instanceId).join(", ");
+  const leftOutNote = (unknown: readonly ModelSelection[]) => unknown.length > 0 ? t("settings.aiPool.leftOut", { names: nameOf(unknown) }) : "";
+  /** What turning the pool on would use, read from the AIs as they are now. The owner sees this exact list before anything is saved.
+   * A saved AI that is gone or hidden is dropped. An AI whose pay-per-use status is unknown is left out and named, never used. */
+  const reviewOf = (): PaidReview => {
+    const listed = value.members.filter((member) => state.instances.some((instance) => instance.instanceId === member.instanceId));
+    const kept = listed.length >= 2;
+    const members = kept ? listed : suggestPoolMembers(state.instances, limits, now);
+    const billing = (member: ModelSelection) => memberBilling(member, state.instances);
+    const plans = members.filter((member) => billing(member) === "plan");
+    const unknown = members.filter((member) => billing(member) === "unknown");
+    const paid = kept ? members.filter((member) => billing(member) === "paid") : suggestPaidMembers(state.instances, plans);
+    return { plans, paid, unknown, all: kept ? members.filter((member) => billing(member) !== "unknown") : [...plans, ...paid] };
+  };
+  const turnOn = (members: ModelSelection[], unknown: readonly ModelSelection[]) => {
+    if (members.length < 2) setNeedsSecond(true);
+    else change({ ...value, enabled: true, members });
+    setNotice(leftOutNote(unknown));
   };
   const toggle = () => {
     if (value.enabled) return change({ ...value, enabled: false });
-    const members = value.members.length >= 2 ? value.members : suggestPoolMembers(state.instances, limits, now);
-    if (members.length < 2) return setNeedsSecond(true);
-    change({ ...value, enabled: true, members });
+    const next = reviewOf();
+    setNotice("");
+    setNeedsSecond(false);
+    if (next.paid.length > 0) return setReview(next);
+    setReview(null);
+    turnOn(next.plans, next.unknown);
   };
+  const decide = (includePaid: boolean) => {
+    if (!review) return;
+    const next = reviewOf();
+    setReview(null);
+    if (next.paid.length === 0) return setNotice(t("settings.aiPool.reviewChanged"));
+    turnOn(includePaid ? next.all : next.plans, next.unknown);
+  };
+  /** While the question is open it is read again on every render: if the AIs change, the owner sees the new list before choosing. */
+  const shown = review ? reviewOf() : null;
+  const reviewOpen = shown !== null && shown.paid.length > 0;
+  const reviewNote = !shown ? "" : reviewOpen ? leftOutNote(shown.unknown) : t("settings.aiPool.reviewChanged");
   const setMembers = (members: ModelSelection[]) => {
     if (members.length >= 2) return change({ ...value, members });
     change({ ...value, enabled: false, members });
@@ -111,6 +151,7 @@ export function AiPoolSettings() {
     {error && <span role="alert" className="block text-danger">{error}</span>}
     {saving && <span role="status" className="block">{t("settings.threads.saving")}</span>}
     {notice && <span role="status" className="block">{notice}</span>}
+    {reviewNote && <span role="status" className="block">{reviewNote}</span>}
     {needsSecond && <span className="flex flex-wrap items-center gap-2">
       <span>{t("settings.aiPool.needSecond")}</span>
       <button type="button" className="cursor-pointer text-accent-text hover:underline focus-visible:underline" onClick={openProviders}>{t("settings.aiPool.addAi")}</button>
@@ -125,7 +166,15 @@ export function AiPoolSettings() {
       <SettingRow title={t("settings.pool.title")} subtitle={<span id="ai-pool-help">{t("settings.aiPool.short")}</span>} message={message}>
         <Switch id="ai-pool-enabled" checked={value.enabled} disabled={saving || !state.config} aria-label={t("settings.pool.title")} aria-describedby="ai-pool-help" onClick={toggle} />
       </SettingRow>
-      {value.enabled && <SettingRow title={t("settings.aiPool.mode")} subtitle={t(MODE_LINE_KEY[value.mode])}>
+      {shown && reviewOpen && <SettingRow title={t("settings.aiPool.paidTitle")} subtitle={<span data-ai-pool-paid-review="" className="block">
+        {shown.plans.length > 0 && <span className="block">{t("settings.aiPool.paidPlans", { names: nameOf(shown.plans) })}</span>}
+        <span className="block">{t("settings.aiPool.paidLine", { names: nameOf(shown.paid) })}</span>
+        <span className="block">{t(PAID_LINE_KEY[value.mode])}</span>
+      </span>}>
+        <button type="button" className={textButton} disabled={saving} onClick={() => decide(false)}>{t("settings.aiPool.paidSkip")}</button>
+        <button type="button" className={textButton} disabled={saving} onClick={() => decide(true)}>{t("settings.aiPool.paidInclude")}</button>
+      </SettingRow>}
+      {value.enabled && <SettingRow title={t("settings.aiPool.mode")} subtitle={value.members.some((member) => isPaidMember(member, state.instances)) ? `${t(MODE_LINE_KEY[value.mode])} ${t(PAID_LINE_KEY[value.mode])}` : t(MODE_LINE_KEY[value.mode])}>
         <ModeChoice mode={value.mode} disabled={saving} onChange={(mode) => change({ ...value, mode })} />
       </SettingRow>}
       {value.enabled && <MemberRows {...list} />}

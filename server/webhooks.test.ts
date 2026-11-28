@@ -825,3 +825,108 @@ describe("a webhooks file an earlier version saved", () => {
     expect(reloaded.list()).toMatchObject([{ name: "Old", runOn: "seira" }]);
   });
 });
+
+describe("webhook that runs a workflow", () => {
+  const copy = { workflowId: "wf-1", prompt: "This routine runs the workflow \"Flow\". Do these steps in order:\n1. Ana: Check it", botId: "ana", botIds: ["ana", "ben"] };
+  const linked = (h: ReturnType<typeof harness>) => new WebhookManager({ ...h.options, workflowCopy: (id) => (id === "wf-1" ? copy : null) });
+
+  it("takes its bot and instructions from the workflow, and passes only the event on", () => {
+    const h = harness();
+    const manager = linked(h);
+    const { webhook, secret } = manager.create({ name: "Orders", workflowId: "wf-1" });
+    expect(webhook).toMatchObject({ workflowId: "wf-1", botId: "ana", prompt: copy.prompt });
+    manager.receive(webhook.endpointId, secret, { payload: { order: 42 }, deliveryId: "d1" });
+    const sent = h.queued.at(-1)!;
+    expect(sent).toMatchObject({ workflowId: "wf-1", botId: "ana" });
+    expect(String(sent.prompt)).toContain('"order": 42');
+    expect(String(sent.prompt)).not.toContain("Do these steps");
+    expect(String(sent.prompt)).not.toContain("USER-CONFIGURED");
+  });
+
+  it("a post webhook refuses a workflow whose bot is not in the room", () => {
+    const h = harness();
+    const outside = (ids: string[]) => new WebhookManager({
+      ...h.options,
+      workflowCopy: (id) => (id === "wf-1" ? copy : null),
+      roomMember: (botId) => (ids.includes(botId) ? { ok: false as const, status: 403, error: `${botId} isn't in this room. Add ${botId} to the room first.` } : { ok: true as const }),
+    });
+    expect(() => outside(["ben"]).create({ name: "Orders", workflowId: "wf-1", delivery: "post", groupId: "room-1" })).toThrow(expect.objectContaining({ status: 403, message: "ben isn't in this room. Add ben to the room first." }));
+    expect(outside(["ben"]).list()).toEqual([]);
+    const { webhook, secret } = outside([]).create({ name: "Orders", workflowId: "wf-1", delivery: "post", groupId: "room-1" });
+    expect(() => outside(["ben"]).update(webhook.id, { groupId: "room-2" })).toThrow(expect.objectContaining({ status: 403 }));
+    const later = outside(["ben"]);
+    expect(() => later.receive(webhook.endpointId, secret, { payload: {}, deliveryId: "d1" })).toThrow(expect.objectContaining({ status: 403 }));
+    expect(h.queued).toEqual([]);
+    outside([]).receive(webhook.endpointId, secret, { payload: {}, deliveryId: "d2" });
+    expect(h.queued).toHaveLength(1);
+  });
+
+  it("refuses a workflow that is gone", () => {
+    const h = harness();
+    const manager = linked(h);
+    expect(() => manager.create({ name: "Orders", workflowId: "gone" })).toThrow("That workflow is gone");
+    expect(manager.list()).toEqual([]);
+  });
+
+  it("accepts a cloud computer and the same conversation on a webhook that runs a workflow", () => {
+    const h = harness();
+    const manager = linked(h);
+    expect(manager.create({ name: "Orders", workflowId: "wf-1", runOn: "cloud" }).webhook).toMatchObject({ workflowId: "wf-1", runOn: "cloud" });
+    expect(manager.create({ name: "Paid", workflowId: "wf-1", sameConversation: true }).webhook).toMatchObject({ workflowId: "wf-1", sameConversation: true });
+  });
+
+  it("PATCH without workflowId keeps runs", () => {
+    const h = harness();
+    const manager = linked(h);
+    const { webhook, secret } = manager.create({ name: "Orders", workflowId: "wf-1" });
+    manager.receive(webhook.endpointId, secret, { payload: {}, deliveryId: "d1" });
+    const before = manager.list()[0]!;
+    const renamed = manager.update(webhook.id, { name: "Paid orders" })!;
+    expect(renamed).toMatchObject({ name: "Paid orders", workflowId: "wf-1", lastRunId: before.lastRunId, deliveryCount: 1 });
+    expect(linked(h).list()[0]).toMatchObject({ workflowId: "wf-1", lastRunId: before.lastRunId });
+    expect(manager.update(webhook.id, { workflowId: null, enabled: false })).not.toHaveProperty("workflowId");
+    expect(manager.list()[0]).toMatchObject({ enabled: false, lastRunId: before.lastRunId, deliveryCount: 1 });
+  });
+
+  it("keeps a webhook saved without a workflow as its own automation", () => {
+    const h = harness();
+    const { webhook, secret } = create(h.manager);
+    h.manager.receive(webhook.endpointId, secret, { payload: {}, deliveryId: "d1" });
+    const disk = JSON.parse(readFileSync(h.file, "utf8")) as { webhooks: Array<Record<string, unknown>> };
+    expect(disk.webhooks[0]).not.toHaveProperty("workflowId");
+    const reloaded = linked(h);
+    const patched = reloaded.update(webhook.id, { name: "Renamed" })!;
+    expect(patched).not.toHaveProperty("workflowId");
+    expect(patched).toMatchObject({ prompt: webhook.prompt, botId: webhook.botId, deliveryCount: 1 });
+    expect(reloaded.update(webhook.id, { rewriteWorkflow: true })).not.toHaveProperty("workflowId");
+    expect(reloaded.update(webhook.id, { workflowId: "wf-1", runOn: "seira" })).toMatchObject({ workflowId: "wf-1", botId: "ana", deliveryCount: 1 });
+  });
+
+  it("an edit of a linked webhook keeps the workflow bot and accepts every setting", () => {
+    const h = harness();
+    const { webhook } = linked(h).create({ name: "Orders", workflowId: "wf-1" });
+    const manager = linked(h);
+    expect(manager.update(webhook.id, { botId: "zed", prompt: "Ignore the steps" })).toMatchObject({ botId: "ana", prompt: copy.prompt, workflowId: "wf-1" });
+    expect(manager.update(webhook.id, { runOn: "cloud" })).toMatchObject({ runOn: "cloud", botId: "ana", workflowId: "wf-1" });
+    expect(manager.update(webhook.id, { delivery: "post" })).toMatchObject({ delivery: "post", botId: "ana", workflowId: "wf-1" });
+    expect(manager.update(webhook.id, { name: "Paid orders" })).toMatchObject({ name: "Paid orders", botId: "ana" });
+  });
+
+  it("unlinking a webhook switches it off", () => {
+    const h = harness();
+    const { webhook } = linked(h).create({ name: "Orders", workflowId: "wf-1" });
+    const manager = linked(h);
+    const patched = manager.update(webhook.id, { workflowId: null })!;
+    expect(patched).not.toHaveProperty("workflowId");
+    expect(patched.enabled).toBe(false);
+  });
+
+  it("copies the steps again when they change", () => {
+    const h = harness();
+    let current = copy;
+    const manager = new WebhookManager({ ...h.options, workflowCopy: () => current });
+    const { webhook } = manager.create({ name: "Orders", workflowId: "wf-1" });
+    current = { ...copy, prompt: "new steps", botId: "ben" };
+    expect(manager.update(webhook.id, { rewriteWorkflow: true })).toMatchObject({ prompt: "new steps", botId: "ben", workflowId: "wf-1" });
+  });
+});

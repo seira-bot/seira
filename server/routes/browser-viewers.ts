@@ -18,6 +18,7 @@ import { messageFileDisposition } from "../message-file.ts";
 import { isSameOrigin, type RequestAuth } from "../request-auth.ts";
 import { PASS, type RouteHandler } from "./table.ts";
 import type { Upgrades } from "./upgrades.ts";
+import { PUBLIC_ERROR_MARK } from "../public-error.ts";
 
 const LIVE = /^\/api\/bots\/([\w-]+)\/browser\/(live|action)$/;
 const STREAM = /^\/api\/bots\/([\w-]+)\/browser\/stream$/;
@@ -52,6 +53,7 @@ export interface BrowserViewerRouteDeps {
 const ownerOf = (auth: RequestAuth) => (auth.kind === "session" ? auth.session.id : "local-owner");
 
 class UploadError extends Error {
+  readonly [PUBLIC_ERROR_MARK] = true;
   readonly status: number;
   constructor(status: number, message: string) {
     super(message);

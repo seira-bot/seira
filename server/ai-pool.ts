@@ -1,6 +1,8 @@
 import { z } from "zod";
 
 import { AI_POOL_LEVELS } from "../shared/ai-pool.ts";
+import type { ModelSelection } from "../shared/wire.ts";
+import { sameModelSelection } from "../shared/thread-model.ts";
 import { defaultModelSelectionSchema } from "./model-selection-schema.ts";
 
 export * from "../shared/ai-pool.ts";
@@ -29,3 +31,12 @@ export const aiPoolSchema = z.object({
 });
 export type AiPoolConfig = z.output<typeof aiPoolSchema>;
 
+
+/**
+ * The pool mark for a conversation after a person changes its model. A client that sends `aiPool` decides.
+ * Without it, a changed model on an `auto` conversation becomes `pinned`: a person picked it, so the pool must not move it back.
+ */
+export function markAfterPick(mark: "auto" | "pinned" | undefined, asked: boolean | undefined, from: ModelSelection | undefined, to: ModelSelection): "auto" | "pinned" | undefined {
+  if (asked !== undefined) return asked ? "auto" : "pinned";
+  return mark === "auto" && !sameModelSelection(from, to) ? "pinned" : undefined;
+}

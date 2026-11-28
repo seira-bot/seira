@@ -5,7 +5,7 @@ import { createHash } from "node:crypto";
 
 import { errorFingerprint, isSeiraTool, stepName, type ErrorFacts, type ErrorFingerprint } from "../shared/bug-offer.ts";
 import { conversationDiagnostics } from "./devs-report-issue.ts";
-import { redactReportText, type DevsReportPayload } from "./devs-report.ts";
+import { GENERIC_REPORT_TITLE, cleanTitle, redactReportText, type DevsReportPayload } from "./devs-report.ts";
 import { clip, oneLine } from "./host/text-clip.ts";
 
 export interface OfferReportInput {
@@ -140,5 +140,7 @@ export function publicDevsReport(payload: DevsReportPayload, secrets?: readonly 
   const { contactEmail: _email, contact: _contact, ...rest } = payload;
   const kept = options.whole ? rest.diagnostics : conversationDiagnostics(rest.diagnostics);
   const diagnostics = kept.split("\n").filter((line) => !/^\s*Install:\s/.test(line)).join("\n");
-  return { ...rest, diagnostics: cleanReportText(diagnostics, { names: options.names ?? [], secrets }) };
+  // The title is its own public field: it gets the same secret redaction first, then the names, hosts and paths of the title rules.
+  const title = cleanTitle(rest.title, { redact: (text) => redactReportText(text, secrets), names: [...(options.names ?? []), rest.installId], max: LIMITS.title, sentence: false }) || GENERIC_REPORT_TITLE;
+  return { ...rest, title, diagnostics: cleanReportText(diagnostics, { names: options.names ?? [], secrets }) };
 }

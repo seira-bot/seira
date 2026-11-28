@@ -6,7 +6,7 @@
 // still comes back once, and no second job starts. A question Mira asks the person in their own chat with her Clive may
 // answer for them there, as her Chief; a bot that is not her Chief may not. It proves where things land, not a model's
 // judgement.
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { expect, it } from "vitest";
@@ -14,14 +14,14 @@ import { expect, it } from "vitest";
 import { launchVerificationServer, runControlSeira } from "../scripts/control-seira.ts";
 import { hostTimeout } from "./testing/host-timeout.ts";
 import { ownTurnText } from "./testing/room-handoff-agent.ts";
+import { readJsonLines } from "./testing/json-lines.ts";
 
 const SETTLED = "Your downstream room requests have settled.";
 const REPORT_FROM_MIRA = "[From @Mira (bot) · report on assignment";
 const QUESTION_FROM_MIRA = "[From @Mira (bot) · question on assignment";
 
 type Row = Record<string, any>;
-const jsonl = (path: string): any[] => existsSync(path)
-  ? readFileSync(path, "utf8").trim().split("\n").filter(Boolean).map((line) => JSON.parse(line)) : [];
+const jsonl = (path: string): any[] => readJsonLines(path);
 
 function assignments(dataDir: string): Row[] {
   const path = join(dataDir, "runtime.db");

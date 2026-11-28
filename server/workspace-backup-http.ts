@@ -18,6 +18,7 @@ import type { RequestAuth } from "./request-auth.ts";
 import { LEAVE_OUT_PARTS, parseLeaveOut, partSizesAsync, singleFlightSizes } from "./workspace-backup-parts.ts";
 import { teamCloudBackup } from "./workspace-backup-team-private.ts";
 import { userErrorFields } from "./user-errors.ts";
+import { PublicError } from "./public-error.ts";
 
 const PREFIX = "/api/workspace-backup";
 const MAX_UPLOAD_BYTES = MAX_WORKSPACE_BACKUP_UPLOAD_BYTES;
@@ -28,7 +29,7 @@ const EXPIRES_MS = 60 * 60_000;
 /** setTimeout fires at once for a delay above this. */
 const MAX_TIMER_MS = 2 ** 31 - 1;
 const passwordSchema = z.string().min(12, "Use a password of at least 12 characters.").max(1024);
-const failure = (message: string, status = 400) => Object.assign(new Error(message), { status });
+const failure = (message: string, status = 400) => new PublicError(message, status);
 type Artifact = {
   owner: string; kind: "download" | "upload" | "uploading" | "staged"; path?: string; expires: number; summary?: WorkspaceBackupSummary;
   /** `uploading` only: the announced size, the bytes stored, and whether a part is being written. */

@@ -18,6 +18,7 @@ const fixture = vi.hoisted(() => ({
   effects: [] as Array<{ effect: EffectCallback; deps?: DependencyList }>,
   usage: [] as Array<{ app: string; calls: number }>,
   featured: [] as unknown[],
+  github: null as null | { enabled: boolean; connected: boolean },
 }));
 vi.mock("react", async (original) => {
   const react = await original<typeof import("react")>();
@@ -42,6 +43,9 @@ vi.mock("@/state/store", () => ({
     dispatch: fixture.dispatch,
   }),
 }));
+vi.mock("@/lib/github-app", async (original) => ({ ...(await original<typeof import("@/lib/github-app")>()), useGithubApp: () => ({ status: fixture.github }) }));
+vi.mock("./GithubCard", () => ({ GithubCard: () => createElement("div", { "data-github-card": true }, "GitHub") }));
+vi.mock("react-dom", async (original) => ({ ...(await original<typeof import("react-dom")>()), createPortal: (children: ReactNode) => createElement("div", { "data-portal": "featured" }, children) }));
 vi.mock("@/lib/app-usage", () => ({ useAppUsage: () => fixture.usage }));
 vi.mock("./McpServersPanel", async () => {
   const { HOSTED_MCP_APPS } = await import("@/lib/hosted-mcp-apps");
@@ -107,6 +111,7 @@ beforeEach(() => {
   fixture.track.mockReset();
   fixture.effects = [];
   fixture.usage = [];
+  fixture.github = null;
   fixture.bots = [];
   fixture.instances = [];
   fixture.overrides = new Map<number, unknown>([
@@ -168,7 +173,7 @@ describe("Apps pop-up", () => {
     expect(html).toContain(`data-hosted-app="${HOSTED_MCP_APPS[0].id}"`);
     for (const other of HOSTED_MCP_APPS.slice(1)) expect(html).not.toContain(`data-hosted-app="${other.id}"`);
   });
-  it.each(["mind map", "booking", "sales funnel", "comment", "join request"])("finds the one hosted card whose keywords match %s", (word) => {
+  it.each(["mind map", "booking", "sales funnel", "join request"])("finds the one hosted card whose keywords match %s", (word) => {
     fixture.overrides.set(HOSTED_CONNECTED, null);
     fixture.overrides.set(SEARCH, word);
     expect(render().html.match(/data-hosted-app="/g)).toHaveLength(1);
@@ -182,6 +187,11 @@ describe("Apps pop-up", () => {
     fixture.overrides.set(HOSTED_CONNECTED, null);
     fixture.overrides.set(SEARCH, "broadcast");
     expect([...render().html.matchAll(/data-hosted-app="([^"]+)"/g)].map((match) => match[1]).sort()).toEqual(["konektor", "wapilot"]);
+  });
+  it("finds the two hosted cards whose text mentions a comment", () => {
+    fixture.overrides.set(HOSTED_CONNECTED, null);
+    fixture.overrides.set(SEARCH, "comment");
+    expect([...render().html.matchAll(/data-hosted-app="([^"]+)"/g)].map((match) => match[1]).sort()).toEqual(["repliz", "tebar"]);
   });
   it("finds the two hosted cards whose text mentions a landing page", () => {
     fixture.overrides.set(HOSTED_CONNECTED, null);
@@ -817,5 +827,41 @@ describe("Featured and Popular sections", () => {
     fixture.usage = [{ app: "NOTION", calls: 9 }];
     fixture.overrides.set(SEARCH, "notion");
     expect(sectionIds(render().nodes)).not.toContain("apps-section-popular");
+  });
+});
+
+describe("native GitHub in the Apps panel", () => {
+  const portal = (html: string) => html.slice(html.indexOf('data-portal="featured"'));
+  const featuredIndex = () => { render(); return fixture.index - 1; };
+
+  it.each([false, true])("keeps the GitHub tile in Featured, connected or not (connected=%s) (AC-07)", (connected) => {
+    fixture.github = { enabled: true, connected };
+    fixture.overrides.set(featuredIndex(), { nodeType: 1 });
+    const { html } = render();
+    expect(html).toContain('data-portal="featured"');
+    expect(portal(html).indexOf('data-native-card="github"')).toBeGreaterThan(-1);
+    expect(html.match(/data-native-card="github"/g)).toHaveLength(1);
+  });
+
+  it("puts the Composio GitHub card last in All apps and out of Popular while native GitHub is offered (AC-08)", () => {
+    fixture.github = { enabled: true, connected: false };
+    fixture.overrides.set(CARDS, [card("github"), card("gmail"), card("slack"), card("notion")]);
+    fixture.usage = [{ app: "GITHUB", calls: 9 }];
+    const { html, nodes: tree } = render();
+    expect(tree.some((node) => node.props.id === "apps-section-popular")).toBe(false);
+    expect(html.match(/data-app-tile="github"/g)).toHaveLength(1);
+    expect(html.indexOf('data-app-tile="github"')).toBeGreaterThan(html.indexOf('data-app-tile="notion"'));
+    expect(html.indexOf('data-app-tile="github"')).toBeGreaterThan(html.indexOf('data-app-tile="gmail"'));
+  });
+
+  it("leaves the Composio GitHub card where it is when it is connected, and when native GitHub is not offered (AC-08)", () => {
+    fixture.overrides.set(CARDS, [card("gmail"), card("github")]);
+    fixture.overrides.set(STATUS, {});
+    expect(render().html.indexOf('data-app-tile="github"')).toBeGreaterThan(render().html.indexOf('data-app-tile="gmail"'));
+    fixture.overrides.set(CARDS, [card("gmail"), card("slack"), card("github")]);
+    fixture.overrides.set(STATUS, { github: { connected: true, accounts: [{ id: "ca_2", status: "ACTIVE" }] } });
+    fixture.github = { enabled: true, connected: false };
+    const html = render().html;
+    expect(html.indexOf('data-app-tile="github"')).toBeLessThan(html.indexOf('data-app-tile="gmail"'));
   });
 });

@@ -423,9 +423,14 @@ export function PluginsPanel() {
   const categoryInMore = category !== null && moreCategories.includes(category);
   const inCategoryView = filter === "all" && category !== null && !searching;
   const nativeCardsShown = (!inCategoryView && (shownHosted.size > 0 || showEmail || showX || showGithub)) || (filter === "connected" && ownServers.some((server) => server.enabled && ownServerShown(server)));
-  const categoryCards = inCategoryView ? visible.filter((card) => inCategory(card, category)) : visible;
+  const lastCard = github !== null && !isConnected("github") ? visible.find((card) => card.slug === "github") : undefined;
+  const withoutLast = lastCard ? visible.filter((card) => card !== lastCard) : visible;
+  const categoryCards = inCategoryView ? visible.filter((card) => inCategory(card, category) && card !== lastCard).concat(lastCard && inCategory(lastCard, category) ? [lastCard] : []) : visible;
   const sectioned = filter === "all" && !searching && category === null;
-  const sections = sectioned ? catalogSections(visible, isConnected, ranked.inline, popularSlugs(usage, visible)) : [];
+  const sections = sectioned
+    ? catalogSections(withoutLast, isConnected, ranked.inline, popularSlugs(usage, withoutLast))
+      .map((section) => (section.kind === "all" && lastCard ? { ...section, cards: [...section.cards, lastCard] } : section))
+    : [];
   const allSection = sections.find((section) => section.kind === "all");
   const popularSection = sections.find((section) => section.kind === "popular");
   const allCards = sectioned ? allSection?.cards ?? [] : categoryCards;
@@ -720,7 +725,7 @@ export function PluginsPanel() {
               >
                 {(() => {
                   const githubTile = <div data-native-card="github" className={showGithub && !inCategoryView ? "contents" : "hidden"}><GithubCard onChange={() => setGithubDialog(true)} /></div>;
-                  return featuredSlot?.nodeType === 1 && sectioned && !githubConnected ? createPortal(githubTile, featuredSlot) : githubTile;
+                  return featuredSlot?.nodeType === 1 && sectioned ? createPortal(githubTile, featuredSlot) : githubTile;
                 })()}
                 <McpServersPanel hostedCards={{ shown: (id) => !inCategoryView && shownHosted.has(id), featured: sectioned ? featuredSlot : null, onConnections: setHostedConnected, onServers: setMcpServers, ...(filter === "connected" ? { ownServers: { shown: ownServerShown, manage: () => chooseFilter("mcp") } } : {}) }} refreshKey={cardsRefresh} />
                 <div data-native-card="x" className={showX && !inCategoryView ? "contents" : "hidden"}><XCard refreshKey={cardsRefresh} onConnection={setXConnected} /></div>
@@ -760,7 +765,7 @@ export function PluginsPanel() {
   );
 
   function renderSuggested() {
-    const shown = suggestions.cards.filter((card) => !isConnected(card.slug));
+    const shown = suggestions.cards.filter((card) => !isConnected(card.slug) && card !== lastCard && !(github !== null && card.slug === "github"));
     if (!sectioned || shown.length === 0) return null;
     const action = suggestions.pick === "available"
       ? { label: t(picking ? "apps.suggested.picking" : "apps.suggested.show"), onClick: pick }

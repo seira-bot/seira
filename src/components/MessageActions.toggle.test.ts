@@ -142,13 +142,22 @@ describe("message actions row", () => {
     expect(items().map((item) => item.textContent)).toEqual(["Pin message", "Show raw markdown"]);
   });
 
-  it("leaves the native menu for a selection or a right-click beside the bubble", async () => {
+  it("leaves the native menu for a right-click beside the bubble, or with text selected outside the bubble", async () => {
     await render();
-    expect(await rightClick(host.querySelector("[data-outside]")!)).toBe(false);
-    window.getSelection()!.selectAllChildren(body());
+    const outside = host.querySelector("[data-outside]")!;
+    expect(await rightClick(outside)).toBe(false);
+    window.getSelection()!.selectAllChildren(outside);
     expect(await rightClick(body())).toBe(false);
     window.getSelection()!.removeAllRanges();
     expect(items()).toHaveLength(0);
+  });
+
+  it("opens the menu on a right-click with text selected inside the bubble", async () => {
+    await render();
+    window.getSelection()!.selectAllChildren(body());
+    expect(await rightClick(body())).toBe(true);
+    window.getSelection()!.removeAllRanges();
+    expect(items().length).toBeGreaterThan(0);
   });
 
   it("leaves the native menu for a video in the bubble, which offers Save and Open", async () => {

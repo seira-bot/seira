@@ -2,7 +2,7 @@
 import { closeSync, constants, existsSync, fstatSync, lstatSync, mkdirSync, openSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 
-import { writeFileAtomic } from "./atomic.ts";
+import { appendLine, writeFileAtomic } from "./atomic.ts";
 import { alwaysCore, isExpired, isMemoryDate, parseMemoryEntries, untilMark, withoutExpired, withoutSuperseded, type MemoryEntryLine } from "./memory-entries.ts";
 import { parseTopicHeader, readTopicHead, renderTopicIndex } from "./memory-topics.ts";
 import { indexMemoryFile, indexedMemoryFiles, recallMemory, removeMemoryFile, type MemoryHit, type SearchMode } from "./message-db.ts";
@@ -461,12 +461,16 @@ export function appendMemoryLog(botId: string, text: string, opts: MemoryUpdateO
   mkdirSync(dir, { recursive: true, mode: 0o700 });
   const relativePath = memoryLogPath(now);
   const path = join(dir, relativePath.slice(`memory/${MEMORY_LOG_DIR}/`.length));
-  let current = "";
-  try {
-    current = readMemoryText(path);
-  } catch {
+  // One appended line, not the whole file again: a chat turn logs here, and rewriting a long day's log and syncing it
+  // held the server up. A link, a shared file or Windows still gets the whole file replaced.
+  if (!appendLine(path, line, 0o600)) {
+    let current = "";
+    try {
+      current = readMemoryText(path);
+    } catch {
+    }
+    writeFileAtomic(path, `${current}${current && !current.endsWith("\n") ? "\n" : ""}${line}\n`, { mode: 0o600 });
   }
-  writeFileAtomic(path, `${current}${current && !current.endsWith("\n") ? "\n" : ""}${line}\n`, { mode: 0o600 });
   indexWrittenMemoryFile(botId, relativePath);
   return { ok: true, file: relativePath, line };
 }

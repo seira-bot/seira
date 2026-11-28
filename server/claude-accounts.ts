@@ -9,6 +9,7 @@ import type { InstanceConfig, InstanceConfigMap } from "./contracts.ts";
 import { addEndpointSchema } from "./openai-compat-endpoints.ts";
 import { CLAUDE_ACCOUNT_ENV_KEYS, resolveClaudeConfigDir } from "./drivers/claude.ts";
 import { resolveCli } from "./procs.ts";
+import { PublicError } from "./public-error.ts";
 
 const displayName = z.string().trim().min(1).max(80).refine((value) => !/\p{Cc}/u.test(value), "Name cannot contain control characters");
 const configDir = z.string().trim().max(4096).refine((value) => !/\p{Cc}/u.test(value), "Directory cannot contain control characters");
@@ -43,7 +44,7 @@ export function accountDirectory(entry: InstanceConfig): string {
     if (raw !== undefined && typeof raw !== "string") throw new Error("Invalid saved directory");
     return resolveClaudeConfigDir(raw, { ...process.env, ...entry.environment });
   } catch {
-    throw Object.assign(new Error("Use an absolute Claude configuration directory or a path beginning with ~/."), { status: 400 });
+    throw new PublicError("Use an absolute Claude configuration directory or a path beginning with ~/.", 400);
   }
 }
 
@@ -67,7 +68,7 @@ export function assertSeparateClaudeAccount(map: InstanceConfigMap, id: string, 
     // A malformed saved account must not block adding or repairing another one.
     try { return directoryIdentity(accountDirectory(other)) === directory; } catch { return false; }
   })) {
-    throw Object.assign(new Error("That Claude directory is already configured. Select the existing account or use a separate directory."), { status: 409 });
+    throw new PublicError("That Claude directory is already configured. Select the existing account or use a separate directory.", 409);
   }
 }
 

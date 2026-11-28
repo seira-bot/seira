@@ -11,7 +11,7 @@ const MINUTE = 60_000;
 const dirs: string[] = [];
 afterEach(() => { for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true }); });
 
-function harness(options: { bot?: () => "ready" | "busy" | "missing"; turn?: () => Promise<void>; resolveResultsThread?: RoutineManagerOptions["resolveResultsThread"] } = {}) {
+function harness(options: { bot?: () => "ready" | "busy" | "missing"; turn?: () => Promise<void>; resolveResultsThread?: RoutineManagerOptions["resolveResultsThread"]; workflow?: Pick<RoutineManagerOptions, "workflowCopy" | "startWorkflow"> } = {}) {
   const dir = mkdtempSync(join(tmpdir(), "seira-checks-"));
   dirs.push(dir);
   let now = new Date(2026, 9, 22, 9, 0, 0).getTime();
@@ -43,6 +43,7 @@ function harness(options: { bot?: () => "ready" | "busy" | "missing"; turn?: () 
     onRunDeferred: (run) => deferred.push(run),
     resolveResultsThread: options.resolveResultsThread,
     checks,
+    ...options.workflow,
   });
   let manager = make();
   const settle = async () => { for (let i = 0; i < 5; i++) await new Promise((resolve) => setTimeout(resolve, 0)); };
@@ -427,5 +428,26 @@ describe("routines with checks", () => {
     expect(() => h.watch({ checks: ["mail", "weather" as never] })).toThrow("Choose checks from calendar, mail and runs");
     expect(() => h.watch({ schedule: { type: "once", at: h.now() + MINUTE } })).toThrow("Checks need a bot routine that repeats");
     expect(() => h.watch({ access: "everything" as never })).toThrow("Choose read-and-draft access or none");
+  });
+});
+
+describe("an automation with steps and checks", () => {
+  it("runs its steps on what the checks found, and settles the checks with the run's result only after the last step", async () => {
+    const startWorkflow = vi.fn(async () => {});
+    const h = harness({ workflow: { workflowCopy: () => ({ workflowId: "wf-1", prompt: "Runs the workflow Orders", botId: "chief", botIds: ["chief", "ben"] }), startWorkflow } });
+    const routine = h.watch({ workflowId: "wf-1", access: null, deliver: null });
+    h.answers.push({ run: { prompt: "New mail: order 42 shipped", key: "batch-1" } });
+    h.manager.runNow(routine.id);
+    await h.tick();
+    expect(startWorkflow).toHaveBeenCalledTimes(1);
+    expect(h.started).toEqual([]);
+    const run = h.manager.listRuns()[0]!;
+    expect(run).toMatchObject({ status: "running", workflowId: "wf-1", checkKey: "batch-1", prompt: "New mail: order 42 shipped" });
+    h.manager.workflowRunState(run.id, "waiting", "Waiting 5 minutes");
+    h.manager.workflowRunState(run.id, "working");
+    expect(h.settled).toEqual([]);
+    h.manager.workflowRunState(run.id, "completed", "Order 42 is on its way.");
+    expect(h.settled.map((one) => [one.checkKey, one.status, one.output])).toEqual([["batch-1", "completed", "Order 42 is on its way."]]);
+    expect(h.manager.listRuns()[0]).toMatchObject({ status: "completed", checkKey: "batch-1", output: "Order 42 is on its way." });
   });
 });

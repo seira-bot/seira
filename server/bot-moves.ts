@@ -10,6 +10,7 @@ import type { RoutineManager } from "./routines.ts";
 import type { BotRecord, GroupRecord } from "./store.ts";
 import type { WaitManager } from "./waits.ts";
 import type { WebhookManager } from "./webhooks.ts";
+import { PublicError } from "./public-error.ts";
 
 /** The "team" a bot moving from this computer to My Cloud goes to. */
 export const MY_CLOUD_TEAM = "my-cloud";
@@ -41,7 +42,7 @@ export function botMoveRefusal(bot: Pick<BotRecord, "name"> & { movedTo?: BotMov
 /** A turn of this bot starts here only while it is not moving or moved. */
 export function assertBotHere(bot: Pick<BotRecord, "name"> & { movedTo?: BotMovedTo; home?: BotRecord["home"] } | null | undefined): void {
   const said = botMoveRefusal(bot);
-  if (said) throw Object.assign(new Error(said), { status: 409, code: "moved" });
+  if (said) throw Object.assign(new PublicError(said, 409), { code: "moved" });
 }
 
 export function createBotMoves(deps: BotMovesDeps) {

@@ -3,7 +3,6 @@ import { useEffect, useSyncExternalStore } from "react";
 import type { BoardCard, BoardView } from "../../shared/board";
 import type { ServerFrame } from "../../shared/wire";
 import { listenLiveFrames } from "@/lib/live-events";
-import { randomUuid } from "@/lib/random-uuid";
 import { api } from "@/state/api";
 
 export interface BoardState {
@@ -15,7 +14,7 @@ export interface BoardState {
 }
 
 const REREAD_MS = 800;
-const LIVE_KINDS: ReadonlySet<ServerFrame["kind"]> = new Set(["bot", "group", "routine.run"]);
+const LIVE_KINDS: ReadonlySet<ServerFrame["kind"]> = new Set(["bot", "group", "routine.run", "todos"]);
 
 let state: BoardState = { loaded: false, failed: false, cards: [], botId: null };
 const listeners = new Set<() => void>();
@@ -97,13 +96,4 @@ export function resetBoardForTest(): void {
   stopListening?.(); stopListening = null;
   state = { loaded: false, failed: false, cards: [], botId: null };
   listeners.clear();
-}
-
-/** Makes a conversation for the bot, then sends the text into it as the first message. */
-export async function createBoardTask(botId: string, text: string): Promise<void> {
-  const made = await api<{ task?: { threadId?: string } }>(`/api/bots/${botId}/tasks`, { method: "POST", body: JSON.stringify({ select: false }) });
-  const threadId = made?.task?.threadId;
-  if (!threadId) throw new Error("No task");
-  await api(`/api/bots/${botId}/messages`, { method: "POST", body: JSON.stringify({ text, threadId, sendId: randomUuid() }) });
-  void loadBoard({ background: true });
 }
