@@ -7,6 +7,7 @@ import {
   ROOM_PARTS, roomReleaseValues, ROUTINE_PARTS, routineReleaseValues, scheduleValue, sha256Hex, TEAM_PARTS,
   type AgentPart, type PartPair, type TeamPart,
 } from "./package-parts.ts";
+import type { NewBotApproval } from "./new-bot-defaults.ts";
 import type { PresetRegistry } from "./presets.ts";
 import type { Routine, RoutineInput, RoutineManager } from "./routines.ts";
 import type { SkillListing, SkillPackageStamp } from "./skills.ts";
@@ -70,6 +71,8 @@ export interface PackageImportDeps {
   presets?: PresetRegistry;
   /** A Team Cloud: the member adding the package, who looks after its bots. */
   createdBy?: string;
+  /** The saved New bot level each imported bot starts at; undefined keeps the workspace default. */
+  newBotApproval?(): NewBotApproval | undefined;
 }
 
 export interface OrgImportContext {
@@ -250,6 +253,7 @@ function runImport(source: ImportSource, options: PackageImportOptions, deps: Pa
   let notes = 0;
   try {
     const selection = deps.defaultSelection();
+    const approval = deps.newBotApproval?.();
     const existingSections = new Set(
       [...store.sections, ...store.bots.map((bot) => bot.section), ...store.groups.map((candidate) => candidate.section)]
         .filter((value): value is string => Boolean(value?.trim()))
@@ -305,6 +309,7 @@ function runImport(source: ImportSource, options: PackageImportOptions, deps: Pa
           section,
           ...(options.visibility ? { visibility: options.visibility } : {}),
           ...(deps.createdBy ? { createdBy: deps.createdBy } : {}),
+          ...(approval ? { approvalMode: approval } : {}),
         },
         { seedMessages: false },
       );
@@ -335,7 +340,7 @@ function runImport(source: ImportSource, options: PackageImportOptions, deps: Pa
             ...(org ? { publisher: { ...org.publisher }, ref: org.ref, sha256: org.sha256 } : {}),
           }
         : undefined;
-      // No connected apps (absence would mean allowed) and no approval level: an imported bot starts at the defaults.
+      // No connected apps (absence would mean allowed). The approval level is the person's own saved one, never the package's.
       store.patchBot(created.id, {
         composio: false,
         connectorTools: {},
